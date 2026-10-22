@@ -1,0 +1,186 @@
+"use client";
+import { useState, useEffect } from "react";
+
+const COUNTRIES = [
+  { name:"Afghanistan", code:"+93", flag:"🇦🇫" }, { name:"Albania", code:"+355", flag:"🇦🇱" },
+  { name:"Algeria", code:"+213", flag:"🇩🇿" }, { name:"Andorra", code:"+376", flag:"🇦🇩" },
+  { name:"Angola", code:"+244", flag:"🇦🇴" }, { name:"Antigua and Barbuda", code:"+1-268", flag:"🇦🇬" },
+  { name:"Argentina", code:"+54", flag:"🇦🇷" }, { name:"Armenia", code:"+374", flag:"🇦🇲" },
+  { name:"Australia", code:"+61", flag:"🇦🇺" }, { name:"Austria", code:"+43", flag:"🇦🇹" },
+  { name:"Azerbaijan", code:"+994", flag:"🇦🇿" }, { name:"Bahamas", code:"+1-242", flag:"🇧🇸" },
+  { name:"Bahrain", code:"+973", flag:"🇧🇭" }, { name:"Bangladesh", code:"+880", flag:"🇧🇩" },
+  { name:"Barbados", code:"+1-246", flag:"🇧🇧" }, { name:"Belarus", code:"+375", flag:"🇧🇾" },
+  { name:"Belgium", code:"+32", flag:"🇧🇪" }, { name:"Belize", code:"+501", flag:"🇧🇿" },
+  { name:"Benin", code:"+229", flag:"🇧🇯" }, { name:"Bhutan", code:"+975", flag:"🇧🇹" },
+  { name:"Bolivia", code:"+591", flag:"🇧🇴" }, { name:"Bosnia and Herzegovina", code:"+387", flag:"🇧🇦" },
+  { name:"Botswana", code:"+267", flag:"🇧🇼" }, { name:"Brazil", code:"+55", flag:"🇧🇷" },
+  { name:"Brunei", code:"+673", flag:"🇧🇳" }, { name:"Bulgaria", code:"+359", flag:"🇧🇬" },
+  { name:"Burkina Faso", code:"+226", flag:"🇧🇫" }, { name:"Burundi", code:"+257", flag:"🇧🇮" },
+  { name:"Cambodia", code:"+855", flag:"🇰🇭" }, { name:"Cameroon", code:"+237", flag:"🇨🇲" },
+  { name:"Canada", code:"+1", flag:"🇨🇦" }, { name:"Cape Verde", code:"+238", flag:"🇨🇻" },
+  { name:"Central African Republic", code:"+236", flag:"🇨🇫" }, { name:"Chad", code:"+235", flag:"🇹🇩" },
+  { name:"Chile", code:"+56", flag:"🇨🇱" }, { name:"China", code:"+86", flag:"🇨🇳" },
+  { name:"Colombia", code:"+57", flag:"🇨🇴" }, { name:"Comoros", code:"+269", flag:"🇰🇲" },
+  { name:"Congo", code:"+242", flag:"🇨🇬" }, { name:"Congo, DR", code:"+243", flag:"🇨🇩" },
+  { name:"Costa Rica", code:"+506", flag:"🇨🇷" }, { name:"Croatia", code:"+385", flag:"🇭🇷" },
+  { name:"Cuba", code:"+53", flag:"🇨🇺" }, { name:"Cyprus", code:"+357", flag:"🇨🇾" },
+  { name:"Czech Republic", code:"+420", flag:"🇨🇿" }, { name:"Denmark", code:"+45", flag:"🇩🇰" },
+  { name:"Djibouti", code:"+253", flag:"🇩🇯" }, { name:"Dominica", code:"+1-767", flag:"🇩🇲" },
+  { name:"Dominican Republic", code:"+1-809", flag:"🇩🇴" }, { name:"Ecuador", code:"+593", flag:"🇪🇨" },
+  { name:"Egypt", code:"+20", flag:"🇪🇬" }, { name:"El Salvador", code:"+503", flag:"🇸🇻" },
+  { name:"Equatorial Guinea", code:"+240", flag:"🇬🇶" }, { name:"Eritrea", code:"+291", flag:"🇪🇷" },
+  { name:"Estonia", code:"+372", flag:"🇪🇪" }, { name:"Eswatini", code:"+268", flag:"🇸🇿" },
+  { name:"Ethiopia", code:"+251", flag:"🇪🇹" }, { name:"Fiji", code:"+679", flag:"🇫🇯" },
+  { name:"Finland", code:"+358", flag:"🇫🇮" }, { name:"France", code:"+33", flag:"🇫🇷" },
+  { name:"Gabon", code:"+241", flag:"🇬🇦" }, { name:"Gambia", code:"+220", flag:"🇬🇲" },
+  { name:"Georgia", code:"+995", flag:"🇬🇪" }, { name:"Germany", code:"+49", flag:"🇩🇪" },
+  { name:"Ghana", code:"+233", flag:"🇬🇭" }, { name:"Greece", code:"+30", flag:"🇬🇷" },
+  { name:"Grenada", code:"+1-473", flag:"🇬🇩" }, { name:"Guatemala", code:"+502", flag:"🇬🇹" },
+  { name:"Guinea", code:"+224", flag:"🇬🇳" }, { name:"Guinea-Bissau", code:"+245", flag:"🇬🇼" },
+  { name:"Guyana", code:"+592", flag:"🇬🇾" }, { name:"Haiti", code:"+509", flag:"🇭🇹" },
+  { name:"Honduras", code:"+504", flag:"🇭🇳" }, { name:"Hungary", code:"+36", flag:"🇭🇺" },
+  { name:"Iceland", code:"+354", flag:"🇮🇸" }, { name:"India", code:"+91", flag:"🇮🇳" },
+  { name:"Indonesia", code:"+62", flag:"🇮🇩" }, { name:"Iran", code:"+98", flag:"🇮🇷" },
+  { name:"Iraq", code:"+964", flag:"🇮🇶" }, { name:"Ireland", code:"+353", flag:"🇮🇪" },
+  { name:"Israel", code:"+972", flag:"🇮🇱" }, { name:"Italy", code:"+39", flag:"🇮🇹" },
+  { name:"Jamaica", code:"+1-876", flag:"🇯🇲" }, { name:"Japan", code:"+81", flag:"🇯🇵" },
+  { name:"Jordan", code:"+962", flag:"🇯🇴" }, { name:"Kazakhstan", code:"+7", flag:"🇰🇿" },
+  { name:"Kenya", code:"+254", flag:"🇰🇪" }, { name:"Kiribati", code:"+686", flag:"🇰🇮" },
+  { name:"Korea, North", code:"+850", flag:"🇰🇵" }, { name:"Korea, South", code:"+82", flag:"🇰🇷" },
+  { name:"Kosovo", code:"+383", flag:"🇽🇰" }, { name:"Kuwait", code:"+965", flag:"🇰🇼" },
+  { name:"Kyrgyzstan", code:"+996", flag:"🇰🇬" }, { name:"Laos", code:"+856", flag:"🇱🇦" },
+  { name:"Latvia", code:"+371", flag:"🇱🇻" }, { name:"Lebanon", code:"+961", flag:"🇱🇧" },
+  { name:"Lesotho", code:"+266", flag:"🇱🇸" }, { name:"Liberia", code:"+231", flag:"🇱🇷" },
+  { name:"Libya", code:"+218", flag:"🇱🇾" }, { name:"Liechtenstein", code:"+423", flag:"🇱🇮" },
+  { name:"Lithuania", code:"+370", flag:"🇱🇹" }, { name:"Luxembourg", code:"+352", flag:"🇱🇺" },
+  { name:"Madagascar", code:"+261", flag:"🇲🇬" }, { name:"Malawi", code:"+265", flag:"🇲🇼" },
+  { name:"Malaysia", code:"+60", flag:"🇲🇾" }, { name:"Maldives", code:"+960", flag:"🇲🇻" },
+  { name:"Mali", code:"+223", flag:"🇲🇱" }, { name:"Malta", code:"+356", flag:"🇲🇹" },
+  { name:"Marshall Islands", code:"+692", flag:"🇲🇭" }, { name:"Mauritania", code:"+222", flag:"🇲🇷" },
+  { name:"Mauritius", code:"+230", flag:"🇲🇺" }, { name:"Mexico", code:"+52", flag:"🇲🇽" },
+  { name:"Micronesia", code:"+691", flag:"🇫🇲" }, { name:"Moldova", code:"+373", flag:"🇲🇩" },
+  { name:"Monaco", code:"+377", flag:"🇲🇨" }, { name:"Mongolia", code:"+976", flag:"🇲🇳" },
+  { name:"Montenegro", code:"+382", flag:"🇲🇪" }, { name:"Morocco", code:"+212", flag:"🇲🇦" },
+  { name:"Mozambique", code:"+258", flag:"🇲🇿" }, { name:"Myanmar", code:"+95", flag:"🇲🇲" },
+  { name:"Namibia", code:"+264", flag:"🇳🇦" }, { name:"Nauru", code:"+674", flag:"🇳🇷" },
+  { name:"Nepal", code:"+977", flag:"🇳🇵" }, { name:"Netherlands", code:"+31", flag:"🇳🇱" },
+  { name:"New Zealand", code:"+64", flag:"🇳🇿" }, { name:"Nicaragua", code:"+505", flag:"🇳🇮" },
+  { name:"Niger", code:"+227", flag:"🇳🇪" }, { name:"Nigeria", code:"+234", flag:"🇳🇬" },
+  { name:"North Macedonia", code:"+389", flag:"🇲🇰" }, { name:"Norway", code:"+47", flag:"🇳🇴" },
+  { name:"Oman", code:"+968", flag:"🇴🇲" }, { name:"Pakistan", code:"+92", flag:"🇵🇰" },
+  { name:"Palau", code:"+680", flag:"🇵🇼" }, { name:"Palestine", code:"+970", flag:"🇵🇸" },
+  { name:"Panama", code:"+507", flag:"🇵🇦" }, { name:"Papua New Guinea", code:"+675", flag:"🇵🇬" },
+  { name:"Paraguay", code:"+595", flag:"🇵🇾" }, { name:"Peru", code:"+51", flag:"🇵🇪" },
+  { name:"Philippines", code:"+63", flag:"🇵🇭" }, { name:"Poland", code:"+48", flag:"🇵🇱" },
+  { name:"Portugal", code:"+351", flag:"🇵🇹" }, { name:"Qatar", code:"+974", flag:"🇶🇦" },
+  { name:"Romania", code:"+40", flag:"🇷🇴" }, { name:"Russia", code:"+7", flag:"🇷🇺" },
+  { name:"Rwanda", code:"+250", flag:"🇷🇼" }, { name:"Saint Kitts and Nevis", code:"+1-869", flag:"🇰🇳" },
+  { name:"Saint Lucia", code:"+1-758", flag:"🇱🇨" }, { name:"Saint Vincent", code:"+1-784", flag:"🇻🇨" },
+  { name:"Samoa", code:"+685", flag:"🇼🇸" }, { name:"San Marino", code:"+378", flag:"🇸🇲" },
+  { name:"Sao Tome and Principe", code:"+239", flag:"🇸🇹" }, { name:"Saudi Arabia", code:"+966", flag:"🇸🇦" },
+  { name:"Senegal", code:"+221", flag:"🇸🇳" }, { name:"Serbia", code:"+381", flag:"🇷🇸" },
+  { name:"Seychelles", code:"+248", flag:"🇸🇨" }, { name:"Sierra Leone", code:"+232", flag:"🇸🇱" },
+  { name:"Singapore", code:"+65", flag:"🇸🇬" }, { name:"Slovakia", code:"+421", flag:"🇸🇰" },
+  { name:"Slovenia", code:"+386", flag:"🇸🇮" }, { name:"Solomon Islands", code:"+677", flag:"🇸🇧" },
+  { name:"Somalia", code:"+252", flag:"🇸🇴" }, { name:"South Africa", code:"+27", flag:"🇿🇦" },
+  { name:"South Sudan", code:"+211", flag:"🇸🇸" }, { name:"Spain", code:"+34", flag:"🇪🇸" },
+  { name:"Sri Lanka", code:"+94", flag:"🇱🇰" }, { name:"Sudan", code:"+249", flag:"🇸🇩" },
+  { name:"Suriname", code:"+597", flag:"🇸🇷" }, { name:"Sweden", code:"+46", flag:"🇸🇪" },
+  { name:"Switzerland", code:"+41", flag:"🇨🇭" }, { name:"Syria", code:"+963", flag:"🇸🇾" },
+  { name:"Taiwan", code:"+886", flag:"🇹🇼" }, { name:"Tajikistan", code:"+992", flag:"🇹🇯" },
+  { name:"Tanzania", code:"+255", flag:"🇹🇿" }, { name:"Thailand", code:"+66", flag:"🇹🇭" },
+  { name:"Timor-Leste", code:"+670", flag:"🇹🇱" }, { name:"Togo", code:"+228", flag:"🇹🇬" },
+  { name:"Tonga", code:"+676", flag:"🇹🇴" }, { name:"Trinidad and Tobago", code:"+1-868", flag:"🇹🇹" },
+  { name:"Tunisia", code:"+216", flag:"🇹🇳" }, { name:"Turkey", code:"+90", flag:"🇹🇷" },
+  { name:"Turkmenistan", code:"+993", flag:"🇹🇲" }, { name:"Tuvalu", code:"+688", flag:"🇹🇻" },
+  { name:"Uganda", code:"+256", flag:"🇺🇬" }, { name:"Ukraine", code:"+380", flag:"🇺🇦" },
+  { name:"UAE", code:"+971", flag:"🇦🇪" }, { name:"United Kingdom", code:"+44", flag:"🇬🇧" },
+  { name:"United States", code:"+1", flag:"🇺🇸" }, { name:"Uruguay", code:"+598", flag:"🇺🇾" },
+  { name:"Uzbekistan", code:"+998", flag:"🇺🇿" }, { name:"Vanuatu", code:"+678", flag:"🇻🇺" },
+  { name:"Vatican City", code:"+379", flag:"🇻🇦" }, { name:"Venezuela", code:"+58", flag:"🇻🇪" },
+  { name:"Vietnam", code:"+84", flag:"🇻🇳" }, { name:"Yemen", code:"+967", flag:"🇾🇪" },
+  { name:"Zambia", code:"+260", flag:"🇿🇲" }, { name:"Zimbabwe", code:"+263", flag:"🇿🇼" },
+];
+
+export default function RegisterPage() {
+  const [selectedCountry, setSelectedCountry] = useState(COUNTRIES.find(c=>c.code==="+256"));
+  const [showCountries, setShowCountries] = useState(false);
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [serverOtp, setServerOtp] = useState("");
+  const [timer, setTimer] = useState(0);
+  const [isVerified, setIsVerified] = useState(false);
+  const [search, setSearch] = useState("");
+
+  useEffect(()=>{ if(timer>0){ const t=setTimeout(()=>setTimer(timer-1),1000); return()=>clearTimeout(t);} },[timer]);
+
+  const fullPhone = `${selectedCountry.code.replace("-","")}${phone.replace(/^0+/,"")}`;
+
+  const sendWhatsAppOTP = async () => {
+    if(!phone) return alert("Enter phone number");
+    const code = Math.floor(100000 + Math.random()*900000).toString();
+    setServerOtp(code); setTimer(60); setIsVerified(false);
+    try {
+      await fetch("/api/send-whatsapp-otp",{ method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ phone:fullPhone, code }) });
+      alert(`OTP sent via WhatsApp to ${fullPhone}`);
+    } catch { alert(`TEST MODE - Code: ${code} for ${fullPhone}`); }
+  };
+
+  const filtered = COUNTRIES.filter(c=> c.name.toLowerCase().includes(search.toLowerCase()) || c.code.includes(search));
+
+  return (
+    <div className="min-h-screen bg-white flex flex-col items-center px-6 pb-10">
+      <div className="h-8" />
+      <h1 className="text-[32px] font-black text-[#0A84FF]">RIOT PLATFORM</h1>
+      <p className="text-[16px] font-bold text-[#0A84FF]">Stake with us.</p>
+      <h2 className="text-[26px] font-black mt-8">Create your account</h2>
+      <p className="text-[13px] text-center max-w-[300px] mt-2">Join RIOT PLATFORM and start staking with the best international platform</p>
+
+      <div className="w-full max-w-[340px] mt-6 flex flex-col gap-3.5">
+        <div className="relative">
+          <div className="h-[50px] flex items-center rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]">
+            <button type="button" onClick={()=>setShowCountries(!showCountries)} className="h-full px-3 flex items-center gap-1.5 bg-white border-r border-[#0A84FF]/30 rounded-l-xl">
+              <span className="text-[18px]">{selectedCountry.flag}</span><span className="text-[12px] font-bold">{selectedCountry.code}</span><span className="text-[8px]">▼</span>
+            </button>
+            <input value={phone} onChange={e=>setPhone(e.target.value.replace(/[^0-9]/g,""))} placeholder="772 229 389" className="flex-1 h-full bg-transparent px-3 outline-none text-[14px]" />
+          </div>
+          {showCountries && (
+            <div className="absolute z-20 top-[54px] w-full bg-white border border-[#0A84FF] rounded-xl shadow-xl overflow-hidden">
+              <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search country or code" className="w-full h-[42px] px-3 border-b outline-none text-[13px]" />
+              <div className="max-h-[240px] overflow-y-auto">
+                {filtered.map(c=>(
+                  <button key={c.name} onClick={()=>{setSelectedCountry(c); setShowCountries(false);}} className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-[#F1F6FF] text-left">
+                    <span className="text-[18px]">{c.flag}</span><span className="text-[13px] flex-1">{c.name}</span><span className="text-[11px] font-bold text-[#0A84FF]">{c.code}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <button onClick={sendWhatsAppOTP} disabled={timer>0} className="h-[46px] rounded-xl bg-black text-white font-bold text-[13px] disabled:bg-gray-400">
+          {timer>0 ? `Resend in ${timer}s` : `Verify number via WhatsApp`}
+        </button>
+
+        {serverOtp && (
+          <div className="flex gap-2">
+            <input value={otp} onChange={e=>setOtp(e.target.value)} placeholder="Enter 6-digit WhatsApp code" className="flex-1 h-[48px] px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF] text-center tracking-[6px] font-bold outline-none" />
+            <button onClick={()=>{ if(otp===serverOtp){setIsVerified(true); alert("Verified ✅");} else alert("Wrong code"); }} className="h-[48px] px-5 rounded-xl bg-[#0A84FF] text-white font-bold text-[13px]">Verify</button>
+          </div>
+        )}
+        {isVerified && <p className="text-[12px] text-green-600 font-bold text-center">✅ {fullPhone} verified - you can now Sign Up</p>}
+
+        <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF] mt-2"><span>👤</span><input placeholder="Enter username" className="flex-1 bg-transparent outline-none text-[14px]" /></div>
+        <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]"><span>✉️</span><input placeholder="Enter email" className="flex-1 bg-transparent outline-none text-[14px]" /></div>
+        <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]"><span>🔒</span><input type="password" placeholder="Enter password" className="flex-1 bg-transparent outline-none text-[14px]" /></div>
+        <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]"><span>🔒</span><input type="password" placeholder="Confirm password" className="flex-1 bg-transparent outline-none text-[14px]" /></div>
+
+        <button disabled={!isVerified} className="h-[52px] rounded-xl bg-[#0A84FF] text-white font-bold text-[18px] disabled:bg-gray-300 mt-1">Sign Up</button>
+
+        <div className="flex items-center gap-2 mt-1"><div className="flex-1 h-[1px] bg-gray-300"/><span className="text-[12px]">Or continue with</span><div className="flex-1 h-[1px] bg-gray-300"/></div>
+        <div className="flex gap-3"><button className="flex-1 h-[46px] rounded-xl border-[1.5px] border-[#0A84FF] bg-white font-medium">G Google</button><button className="flex-1 h-[46px] rounded-xl border-[1.5px] border-[#0A84FF] bg-white font-medium"> Apple</button></div>
+        <p className="text-center text-[12px] mt-3">Already have account?<br/><span className="text-[#0A84FF] font-bold">Login</span></p>
+      </div>
+    </div>
+  );
+}
