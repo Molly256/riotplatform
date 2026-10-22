@@ -116,14 +116,13 @@ export default function RegisterPage() {
 
   const fullPhone = `${selectedCountry.code.replace("-","")}${phone.replace(/^0+/,"")}`;
 
-  const sendWhatsAppOTP = async () => {
+  const sendWhatsAppOTP = () => {
     if(!phone) return alert("Enter phone number");
     const code = Math.floor(100000 + Math.random()*900000).toString();
-    setServerOtp(code); setTimer(60); setIsVerified(false);
-    try {
-      await fetch("/api/send-whatsapp-otp",{ method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ phone:fullPhone, code }) });
-      alert(`OTP sent via WhatsApp to ${fullPhone}`);
-    } catch { alert(`TEST MODE - Code: ${code} for ${fullPhone}`); }
+    setServerOtp(code); 
+    setTimer(60); 
+    setIsVerified(false);
+    alert(`TEST MODE - Your code for ${fullPhone} is: ${code}`);
   };
 
   const filtered = COUNTRIES.filter(c=> c.name.toLowerCase().includes(search.toLowerCase()) || c.code.includes(search));
@@ -134,7 +133,7 @@ export default function RegisterPage() {
       <h1 className="text-[32px] font-black text-[#0A84FF]">RIOT PLATFORM</h1>
       <p className="text-[16px] font-bold text-[#0A84FF]">Stake with us.</p>
       <h2 className="text-[26px] font-black mt-8">Create your account</h2>
-      <p className="text-[13px] text-center max-w-[300px] mt-2">Join RIOT PLATFORM and start staking with the best international platform</p>
+      <p className="text-[13px] text-center max-w-[300px] mt-2">Join RIOT PLATFORM and start staking</p>
 
       <div className="w-full max-w-[340px] mt-6 flex flex-col gap-3.5">
         <div className="relative">
@@ -164,11 +163,11 @@ export default function RegisterPage() {
 
         {serverOtp && (
           <div className="flex gap-2">
-            <input value={otp} onChange={e=>setOtp(e.target.value)} placeholder="Enter 6-digit WhatsApp code" className="flex-1 h-[48px] px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF] text-center tracking-[6px] font-bold outline-none" />
+            <input value={otp} onChange={e=>setOtp(e.target.value)} placeholder="Enter 6-digit code" className="flex-1 h-[48px] px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF] text-center tracking-[6px] font-bold outline-none" />
             <button onClick={()=>{ if(otp===serverOtp){setIsVerified(true); alert("Verified ✅");} else alert("Wrong code"); }} className="h-[48px] px-5 rounded-xl bg-[#0A84FF] text-white font-bold text-[13px]">Verify</button>
           </div>
         )}
-        {isVerified && <p className="text-[12px] text-green-600 font-bold text-center">✅ {fullPhone} verified - you can now Sign Up</p>}
+        {isVerified && <p className="text-[12px] text-green-600 font-bold text-center">✅ {fullPhone} verified</p>}
 
         <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF] mt-2"><span>👤</span><input placeholder="Enter username" className="flex-1 bg-transparent outline-none text-[14px]" /></div>
         <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]"><span>✉️</span><input placeholder="Enter email" className="flex-1 bg-transparent outline-none text-[14px]" /></div>
@@ -176,10 +175,7 @@ export default function RegisterPage() {
         <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]"><span>🔒</span><input type="password" placeholder="Confirm password" className="flex-1 bg-transparent outline-none text-[14px]" /></div>
 
         <button disabled={!isVerified} className="h-[52px] rounded-xl bg-[#0A84FF] text-white font-bold text-[18px] disabled:bg-gray-300 mt-1">Sign Up</button>
-
-        <div className="flex items-center gap-2 mt-1"><div className="flex-1 h-[1px] bg-gray-300"/><span className="text-[12px]">Or continue with</span><div className="flex-1 h-[1px] bg-gray-300"/></div>
-        <div className="flex gap-3"><button className="flex-1 h-[46px] rounded-xl border-[1.5px] border-[#0A84FF] bg-white font-medium">G Google</button><button className="flex-1 h-[46px] rounded-xl border-[1.5px] border-[#0A84FF] bg-white font-medium"> Apple</button></div>
-        <p className="text-center text-[12px] mt-3">Already have account?<br/><span className="text-[#0A84FF] font-bold">Login</span></p>
+        <p className="text-center text-[12px] mt-3">Already have account? <a href="/login" className="text-[#0A84FF] font-bold">Login</a></p>
       </div>
     </div>
   );
