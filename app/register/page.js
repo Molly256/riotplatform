@@ -100,10 +100,10 @@ const COUNTRIES = [
   { name:"Vatican City", code:"+379", flag:"🇻🇦" }, { name:"Venezuela", code:"+58", flag:"🇻🇪" },
   { name:"Vietnam", code:"+84", flag:"🇻🇳" }, { name:"Yemen", code:"+967", flag:"🇾🇪" },
   { name:"Zambia", code:"+260", flag:"🇿🇲" }, { name:"Zimbabwe", code:"+263", flag:"🇿🇼" },
-];
+].sort((a,b)=> a.name.localeCompare(b.name));
 
 export default function RegisterPage() {
-  const [selectedCountry, setSelectedCountry] = useState(COUNTRIES.find(c=>c.code==="+256"));
+  const [selectedCountry, setSelectedCountry] = useState(COUNTRIES.find(c=>c.code==="+256") || COUNTRIES[0]);
   const [showCountries, setShowCountries] = useState(false);
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
@@ -125,7 +125,7 @@ export default function RegisterPage() {
     alert(`TEST MODE - Your code for ${fullPhone} is: ${code}`);
   };
 
-  const filtered = COUNTRIES.filter(c=> c.name.toLowerCase().includes(search.toLowerCase()) || c.code.includes(search));
+  const filtered = COUNTRIES.filter(c=> c.name.toLowerCase().includes(search.toLowerCase()) || c.code.includes(search)).sort((a,b)=> a.name.localeCompare(b.name));
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center px-6 pb-10">
@@ -169,10 +169,10 @@ export default function RegisterPage() {
         )}
         {isVerified && <p className="text-[12px] text-green-600 font-bold text-center">✅ {fullPhone} verified</p>}
 
-        <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF] mt-2"><span>👤</span><input placeholder="Enter username" className="flex-1 bg-transparent outline-none text-[14px]" /></div>
-        <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]"><span>✉️</span><input placeholder="Enter email" className="flex-1 bg-transparent outline-none text-[14px]" /></div>
-        <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]"><span>🔒</span><input type="password" placeholder="Enter password" className="flex-1 bg-transparent outline-none text-[14px]" /></div>
-        <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]"><span>🔒</span><input type="password" placeholder="Confirm password" className="flex-1 bg-transparent outline-none text-[14px]" /></div>
+        <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF] mt-2"><span className="text-[#0A84FF]">👤</span><input placeholder="Enter username" className="flex-1 bg-transparent outline-none text-[14px]" /></div>
+        <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]"><span className="text-[#0A84FF]">✉️</span><input placeholder="Enter email" className="flex-1 bg-transparent outline-none text-[14px]" /></div>
+        <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]"><span className="text-[#0A84FF]">🔒</span><input type="password" placeholder="Enter password" className="flex-1 bg-transparent outline-none text-[14px]" /></div>
+        <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]"><span className="text-[#0A84FF]">🔒</span><input type="password" placeholder="Confirm password" className="flex-1 bg-transparent outline-none text-[14px]" /></div>
 
         <button disabled={!isVerified} className="h-[52px] rounded-xl bg-[#0A84FF] text-white font-bold text-[18px] disabled:bg-gray-300 mt-1">Sign Up</button>
         <p className="text-center text-[12px] mt-3">Already have account? <a href="/login" className="text-[#0A84FF] font-bold">Login</a></p>
