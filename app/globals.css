@@ -1,16 +1,5 @@
 @import "tailwindcss";
 
-* {
-  box-sizing: border-box;
-}
-
-html, body {
-  background: #ffffff !important;
-  margin: 0;
-  padding: 0;
-}
-
-img {
-  max-width: 100%;
-  height: auto;
+body {
+  background: white;
 }
