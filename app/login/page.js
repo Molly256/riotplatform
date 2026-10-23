@@ -1,96 +1,154 @@
 "use client";
 import { useState } from "react";
 
+const COUNTRIES = [
+  { name:"Afghanistan", code:"+93", flag:"🇦🇫" }, { name:"Albania", code:"+355", flag:"🇦🇱" },
+  { name:"Algeria", code:"+213", flag:"🇩🇿" }, { name:"Andorra", code:"+376", flag:"🇦🇩" },
+  { name:"Angola", code:"+244", flag:"🇦🇴" }, { name:"Antigua and Barbuda", code:"+1-268", flag:"🇦🇬" },
+  { name:"Argentina", code:"+54", flag:"🇦🇷" }, { name:"Armenia", code:"+374", flag:"🇦🇲" },
+  { name:"Australia", code:"+61", flag:"🇦🇺" }, { name:"Austria", code:"+43", flag:"🇦🇹" },
+  { name:"Azerbaijan", code:"+994", flag:"🇦🇿" }, { name:"Bahamas", code:"+1-242", flag:"🇧🇸" },
+  { name:"Bahrain", code:"+973", flag:"🇧🇭" }, { name:"Bangladesh", code:"+880", flag:"🇧🇩" },
+  { name:"Barbados", code:"+1-246", flag:"🇧🇧" }, { name:"Belarus", code:"+375", flag:"🇧🇾" },
+  { name:"Belgium", code:"+32", flag:"🇧🇪" }, { name:"Belize", code:"+501", flag:"🇧🇿" },
+  { name:"Benin", code:"+229", flag:"🇧🇯" }, { name:"Bhutan", code:"+975", flag:"🇧🇹" },
+  { name:"Bolivia", code:"+591", flag:"🇧🇴" }, { name:"Bosnia and Herzegovina", code:"+387", flag:"🇧🇦" },
+  { name:"Botswana", code:"+267", flag:"🇧🇼" }, { name:"Brazil", code:"+55", flag:"🇧🇷" },
+  { name:"Brunei", code:"+673", flag:"🇧🇳" }, { name:"Bulgaria", code:"+359", flag:"🇧🇬" },
+  { name:"Burkina Faso", code:"+226", flag:"🇧🇫" }, { name:"Burundi", code:"+257", flag:"🇧🇮" },
+  { name:"Cambodia", code:"+855", flag:"🇰🇭" }, { name:"Cameroon", code:"+237", flag:"🇨🇲" },
+  { name:"Canada", code:"+1", flag:"🇨🇦" }, { name:"Cape Verde", code:"+238", flag:"🇨🇻" },
+  { name:"Central African Republic", code:"+236", flag:"🇨🇫" }, { name:"Chad", code:"+235", flag:"🇹🇩" },
+  { name:"Chile", code:"+56", flag:"🇨🇱" }, { name:"China", code:"+86", flag:"🇨🇳" },
+  { name:"Colombia", code:"+57", flag:"🇨🇴" }, { name:"Comoros", code:"+269", flag:"🇰🇲" },
+  { name:"Congo", code:"+242", flag:"🇨🇬" }, { name:"Congo, DR", code:"+243", flag:"🇨🇩" },
+  { name:"Costa Rica", code:"+506", flag:"🇨🇷" }, { name:"Croatia", code:"+385", flag:"🇭🇷" },
+  { name:"Cuba", code:"+53", flag:"🇨🇺" }, { name:"Cyprus", code:"+357", flag:"🇨🇾" },
+  { name:"Czech Republic", code:"+420", flag:"🇨🇿" }, { name:"Denmark", code:"+45", flag:"🇩🇰" },
+  { name:"Djibouti", code:"+253", flag:"🇩🇯" }, { name:"Dominica", code:"+1-767", flag:"🇩🇲" },
+  { name:"Dominican Republic", code:"+1-809", flag:"🇩🇴" }, { name:"Ecuador", code:"+593", flag:"🇪🇨" },
+  { name:"Egypt", code:"+20", flag:"🇪🇬" }, { name:"El Salvador", code:"+503", flag:"🇸🇻" },
+  { name:"Equatorial Guinea", code:"+240", flag:"🇬🇶" }, { name:"Eritrea", code:"+291", flag:"🇪🇷" },
+  { name:"Estonia", code:"+372", flag:"🇪🇪" }, { name:"Eswatini", code:"+268", flag:"🇸🇿" },
+  { name:"Ethiopia", code:"+251", flag:"🇪🇹" }, { name:"Fiji", code:"+679", flag:"🇫🇯" },
+  { name:"Finland", code:"+358", flag:"🇫🇮" }, { name:"France", code:"+33", flag:"🇫🇷" },
+  { name:"Gabon", code:"+241", flag:"🇬🇦" }, { name:"Gambia", code:"+220", flag:"🇬🇲" },
+  { name:"Georgia", code:"+995", flag:"🇬🇪" }, { name:"Germany", code:"+49", flag:"🇩🇪" },
+  { name:"Ghana", code:"+233", flag:"🇬🇭" }, { name:"Greece", code:"+30", flag:"🇬🇷" },
+  { name:"Grenada", code:"+1-473", flag:"🇬🇩" }, { name:"Guatemala", code:"+502", flag:"🇬🇹" },
+  { name:"Guinea", code:"+224", flag:"🇬🇳" }, { name:"Guinea-Bissau", code:"+245", flag:"🇬🇼" },
+  { name:"Guyana", code:"+592", flag:"🇬🇾" }, { name:"Haiti", code:"+509", flag:"🇭🇹" },
+  { name:"Honduras", code:"+504", flag:"🇭🇳" }, { name:"Hungary", code:"+36", flag:"🇭🇺" },
+  { name:"Iceland", code:"+354", flag:"🇮🇸" }, { name:"India", code:"+91", flag:"🇮🇳" },
+  { name:"Indonesia", code:"+62", flag:"🇮🇩" }, { name:"Iran", code:"+98", flag:"🇮🇷" },
+  { name:"Iraq", code:"+964", flag:"🇮🇶" }, { name:"Ireland", code:"+353", flag:"🇮🇪" },
+  { name:"Israel", code:"+972", flag:"🇮🇱" }, { name:"Italy", code:"+39", flag:"🇮🇹" },
+  { name:"Jamaica", code:"+1-876", flag:"🇯🇲" }, { name:"Japan", code:"+81", flag:"🇯🇵" },
+  { name:"Jordan", code:"+962", flag:"🇯🇴" }, { name:"Kazakhstan", code:"+7", flag:"🇰🇿" },
+  { name:"Kenya", code:"+254", flag:"🇰🇪" }, { name:"Kiribati", code:"+686", flag:"🇰🇮" },
+  { name:"Korea, North", code:"+850", flag:"🇰🇵" }, { name:"Korea, South", code:"+82", flag:"🇰🇷" },
+  { name:"Kosovo", code:"+383", flag:"🇽🇰" }, { name:"Kuwait", code:"+965", flag:"🇰🇼" },
+  { name:"Kyrgyzstan", code:"+996", flag:"🇰🇬" }, { name:"Laos", code:"+856", flag:"🇱🇦" },
+  { name:"Latvia", code:"+371", flag:"🇱🇻" }, { name:"Lebanon", code:"+961", flag:"🇱🇧" },
+  { name:"Lesotho", code:"+266", flag:"🇱🇸" }, { name:"Liberia", code:"+231", flag:"🇱🇷" },
+  { name:"Libya", code:"+218", flag:"🇱🇾" }, { name:"Liechtenstein", code:"+423", flag:"🇱🇮" },
+  { name:"Lithuania", code:"+370", flag:"🇱🇹" }, { name:"Luxembourg", code:"+352", flag:"🇱🇺" },
+  { name:"Madagascar", code:"+261", flag:"🇲🇬" }, { name:"Malawi", code:"+265", flag:"🇲🇼" },
+  { name:"Malaysia", code:"+60", flag:"🇲🇾" }, { name:"Maldives", code:"+960", flag:"🇲🇻" },
+  { name:"Mali", code:"+223", flag:"🇲🇱" }, { name:"Malta", code:"+356", flag:"🇲🇹" },
+  { name:"Marshall Islands", code:"+692", flag:"🇲🇭" }, { name:"Mauritania", code:"+222", flag:"🇲🇷" },
+  { name:"Mauritius", code:"+230", flag:"🇲🇺" }, { name:"Mexico", code:"+52", flag:"🇲🇽" },
+  { name:"Micronesia", code:"+691", flag:"🇫🇲" }, { name:"Moldova", code:"+373", flag:"🇲🇩" },
+  { name:"Monaco", code:"+377", flag:"🇲🇨" }, { name:"Mongolia", code:"+976", flag:"🇲🇳" },
+  { name:"Montenegro", code:"+382", flag:"🇲🇪" }, { name:"Morocco", code:"+212", flag:"🇲🇦" },
+  { name:"Mozambique", code:"+258", flag:"🇲🇿" }, { name:"Myanmar", code:"+95", flag:"🇲🇲" },
+  { name:"Namibia", code:"+264", flag:"🇳🇦" }, { name:"Nauru", code:"+674", flag:"🇳🇷" },
+  { name:"Nepal", code:"+977", flag:"🇳🇵" }, { name:"Netherlands", code:"+31", flag:"🇳🇱" },
+  { name:"New Zealand", code:"+64", flag:"🇳🇿" }, { name:"Nicaragua", code:"+505", flag:"🇳🇮" },
+  { name:"Niger", code:"+227", flag:"🇳🇪" }, { name:"Nigeria", code:"+234", flag:"🇳🇬" },
+  { name:"North Macedonia", code:"+389", flag:"🇲🇰" }, { name:"Norway", code:"+47", flag:"🇳🇴" },
+  { name:"Oman", code:"+968", flag:"🇴🇲" }, { name:"Pakistan", code:"+92", flag:"🇵🇰" },
+  { name:"Palau", code:"+680", flag:"🇵🇼" }, { name:"Palestine", code:"+970", flag:"🇵🇸" },
+  { name:"Panama", code:"+507", flag:"🇵🇦" }, { name:"Papua New Guinea", code:"+675", flag:"🇵🇬" },
+  { name:"Paraguay", code:"+595", flag:"🇵🇾" }, { name:"Peru", code:"+51", flag:"🇵🇪" },
+  { name:"Philippines", code:"+63", flag:"🇵🇭" }, { name:"Poland", code:"+48", flag:"🇵🇱" },
+  { name:"Portugal", code:"+351", flag:"🇵🇹" }, { name:"Qatar", code:"+974", flag:"🇶🇦" },
+  { name:"Romania", code:"+40", flag:"🇷🇴" }, { name:"Russia", code:"+7", flag:"🇷🇺" },
+  { name:"Rwanda", code:"+250", flag:"🇷🇼" }, { name:"Saint Kitts and Nevis", code:"+1-869", flag:"🇰🇳" },
+  { name:"Saint Lucia", code:"+1-758", flag:"🇱🇨" }, { name:"Saint Vincent", code:"+1-784", flag:"🇻🇨" },
+  { name:"Samoa", code:"+685", flag:"🇼🇸" }, { name:"San Marino", code:"+378", flag:"🇸🇲" },
+  { name:"Sao Tome and Principe", code:"+239", flag:"🇸🇹" }, { name:"Saudi Arabia", code:"+966", flag:"🇸🇦" },
+  { name:"Senegal", code:"+221", flag:"🇸🇳" }, { name:"Serbia", code:"+381", flag:"🇷🇸" },
+  { name:"Seychelles", code:"+248", flag:"🇸🇨" }, { name:"Sierra Leone", code:"+232", flag:"🇸🇱" },
+  { name:"Singapore", code:"+65", flag:"🇸🇬" }, { name:"Slovakia", code:"+421", flag:"🇸🇰" },
+  { name:"Slovenia", code:"+386", flag:"🇸🇮" }, { name:"Solomon Islands", code:"+677", flag:"🇸🇧" },
+  { name:"Somalia", code:"+252", flag:"🇸🇴" }, { name:"South Africa", code:"+27", flag:"🇿🇦" },
+  { name:"South Sudan", code:"+211", flag:"🇸🇸" }, { name:"Spain", code:"+34", flag:"🇪🇸" },
+  { name:"Sri Lanka", code:"+94", flag:"🇱🇰" }, { name:"Sudan", code:"+249", flag:"🇸🇩" },
+  { name:"Suriname", code:"+597", flag:"🇸🇷" }, { name:"Sweden", code:"+46", flag:"🇸🇪" },
+  { name:"Switzerland", code:"+41", flag:"🇨🇭" }, { name:"Syria", code:"+963", flag:"🇸🇾" },
+  { name:"Taiwan", code:"+886", flag:"🇹🇼" }, { name:"Tajikistan", code:"+992", flag:"🇹🇯" },
+  { name:"Tanzania", code:"+255", flag:"🇹🇿" }, { name:"Thailand", code:"+66", flag:"🇹🇭" },
+  { name:"Timor-Leste", code:"+670", flag:"🇹🇱" }, { name:"Togo", code:"+228", flag:"🇹🇬" },
+  { name:"Tonga", code:"+676", flag:"🇹🇴" }, { name:"Trinidad and Tobago", code:"+1-868", flag:"🇹🇹" },
+  { name:"Tunisia", code:"+216", flag:"🇹🇳" }, { name:"Turkey", code:"+90", flag:"🇹🇷" },
+  { name:"Turkmenistan", code:"+993", flag:"🇹🇲" }, { name:"Tuvalu", code:"+688", flag:"🇹🇻" },
+  { name:"Uganda", code:"+256", flag:"🇺🇬" }, { name:"Ukraine", code:"+380", flag:"🇺🇦" },
+  { name:"UAE", code:"+971", flag:"🇦🇪" }, { name:"United Kingdom", code:"+44", flag:"🇬🇧" },
+  { name:"United States", code:"+1", flag:"🇺🇸" }, { name:"Uruguay", code:"+598", flag:"🇺🇾" },
+  { name:"Uzbekistan", code:"+998", flag:"🇺🇿" }, { name:"Vanuatu", code:"+678", flag:"🇻🇺" },
+  { name:"Vatican City", code:"+379", flag:"🇻🇦" }, { name:"Venezuela", code:"+58", flag:"🇻🇪" },
+  { name:"Vietnam", code:"+84", flag:"🇻🇳" }, { name:"Yemen", code:"+967", flag:"🇾🇪" },
+  { name:"Zambia", code:"+260", flag:"🇿🇲" }, { name:"Zimbabwe", code:"+263", flag:"🇿🇼" },
+].sort((a,b)=> a.name.localeCompare(b.name));
+
 export default function LoginPage() {
-  const [identifier, setIdentifier] = useState("");
+  const [selectedCountry, setSelectedCountry] = useState(COUNTRIES.find(c=>c.code==="+256") || COUNTRIES[0]);
+  const [showCountries, setShowCountries] = useState(false);
+  const [search, setSearch] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [showLinkModal, setShowLinkModal] = useState(null);
-  const [linkEmail, setLinkEmail] = useState("");
-  const [otp, setOtp] = useState("");
-  const [serverOtp, setServerOtp] = useState("");
-  const [step, setStep] = useState(1);
+  const [show, setShow] = useState(false);
 
-  const handleLogin = (e) => {
-    e.preventDefault();
-    alert(`Logging in as ${identifier}`);
-  };
-
-  // FRONT ONLY - NO API
-  const startOAuthLink = () => {
-    if (!linkEmail) return alert("Enter email you registered with");
-    const code = Math.floor(100000 + Math.random()*900000).toString();
-    setServerOtp(code);
-    setStep(2);
-    alert(`TEST MODE - Verification code for ${linkEmail} is: ${code}`);
-  };
-
-  const confirmLink = () => {
-    if (otp !== serverOtp) return alert("Wrong code");
-    alert(`Success! ${showLinkModal} linked to ${linkEmail}.`);
-    setShowLinkModal(null);
-    setStep(1);
-  };
+  const filtered = COUNTRIES.filter(c=> c.name.toLowerCase().includes(search.toLowerCase()) || c.code.includes(search));
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center px-6 pt-8 pb-10">
-      <h1 className="text-[28px] font-black text-[#0A84FF] tracking-wide leading-none">RIOT PLATFORM</h1>
-      <p className="text-[15px] font-bold text-[#0A84FF] mt-0.5">Stake with us.</p>
-      
-      <h2 className="text-[22px] font-extrabold mt-6 text-black">Welcome back</h2>
-      <p className="text-[12.5px] text-center text-gray-700 mt-1 max-w-[300px] leading-tight">Login to RIOT PLATFORM and continue staking</p>
-
-      <form onSubmit={handleLogin} className="w-full max-w-[320px] mt-5 flex flex-col gap-3">
-        <div className="h-[48px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]">
-          <svg className="w-5 h-5 text-[#0A84FF]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-          <input value={identifier} onChange={e=>setIdentifier(e.target.value)} placeholder="Username or Phone" className="flex-1 bg-transparent outline-none text-[13.5px] placeholder:text-gray-500" />
-        </div>
-
-        <div className="h-[48px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]">
-          <svg className="w-5 h-5 text-[#0A84FF]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          <input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Enter password" className="flex-1 bg-transparent outline-none text-[13.5px] placeholder:text-gray-500" />
-          <span className="text-[#0A84FF] text-[14px]">👁️</span>
-        </div>
-
-        <button type="submit" className="h-[48px] rounded-xl bg-[#0A84FF] text-white font-bold text-[16px] mt-1 shadow-sm">Sign In</button>
-
-        <div className="flex items-center gap-3 mt-1">
-          <div className="flex-1 h-[1px] bg-gray-300"/><span className="text-[11px] text-gray-600">Or continue with</span><div className="flex-1 h-[1px] bg-gray-300"/>
-        </div>
-
-        <div className="flex gap-3">
-          <button type="button" onClick={()=>setShowLinkModal("google")} className="flex-1 h-[42px] rounded-xl border-[1.5px] border-[#0A84FF] bg-white flex items-center justify-center gap-2">
-            <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-4 h-4" alt="G" /><span className="text-[13px] font-medium">Google</span>
-          </button>
-          <button type="button" onClick={()=>setShowLinkModal("apple")} className="flex-1 h-[42px] rounded-xl border-[1.5px] border-[#0A84FF] bg-white flex items-center justify-center gap-2">
-            <img src="https://www.svgrepo.com/show/452110/apple.svg" className="w-4 h-4" alt="Apple" /><span className="text-[13px] font-medium">Apple</span>
-          </button>
-        </div>
-
-        <p className="text-center text-[11px] leading-tight mt-2">Don't have account?<br/><a href="/register" className="text-[#0A84FF] font-bold text-[12px]">Create account</a></p>
-      </form>
-
-      {showLinkModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center px-6 z-50">
-          <div className="w-full max-w-[320px] bg-white rounded-2xl p-6 shadow-2xl border border-[#0A84FF]/20">
-            <h3 className="font-black text-[16px] text-black">Link {showLinkModal} to your account</h3>
-            <p className="text-[11.5px] mt-1.5 text-gray-600 leading-tight">
-              {step===1 ? `Enter the email you registered with on RIOT PLATFORM.` : `We sent code to ${linkEmail}. Enter it below.`}
-            </p>
-            {step===1 ? (
-              <>
-                <input value={linkEmail} onChange={e=>setLinkEmail(e.target.value)} placeholder="Enter registered email" className="w-full h-[46px] mt-4 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF] outline-none text-[13px] placeholder:text-gray-500" />
-                <button onClick={startOAuthLink} className="w-full h-[46px] mt-3 rounded-xl bg-[#0A84FF] text-white font-bold text-[14px]">Verify Email</button>
-              </>
-            ) : (
-              <>
-                <input value={otp} onChange={e=>setOtp(e.target.value)} placeholder="Enter 6-digit code" className="w-full h-[46px] mt-4 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF] text-center tracking-[6px] font-bold outline-none text-[14px]" />
-                <button onClick={confirmLink} className="w-full h-[46px] mt-3 rounded-xl bg-black text-white font-bold text-[14px]">Link & Continue</button>
-              </>
+    <div className="min-h-screen bg-white flex flex-col items-center">
+      <div className="w-full bg-white">
+        <img src="/riot.png" alt="RIOT PLATFORM" className="w-full h-auto object-contain block mix-blend-multiply" />
+      </div>
+      <div className="w-full max-w-[340px] px-6 pb-10">
+        <h2 className="text-[22px] font-extrabold text-black">Welcome back</h2>
+        <p className="text-[12.5px] text-gray-600 mt-1">Login to RIOT PLATFORM</p>
+        <form onSubmit={e=>{e.preventDefault(); window.location.href="/dashboard";}} className="w-full mt-5 flex flex-col gap-3">
+          <div className="relative">
+            <div className="h-[48px] flex items-center rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]">
+              <button type="button" onClick={()=>{setShowCountries(!showCountries); setSearch("");}} className="h-full px-3 flex items-center gap-1.5 bg-white border-r rounded-l-xl">
+                <span className="text-[18px]">{selectedCountry.flag}</span><span className="text-[12px] font-bold text-black">{selectedCountry.code}</span><span className="text-[8px]">▼</span>
+              </button>
+              <input value={phone} onChange={e=>setPhone(e.target.value.replace(/[^0-9]/g,""))} placeholder="772 229 389" className="flex-1 h-full bg-transparent px-3 outline-none text-[13.5px] text-black" />
+            </div>
+            {showCountries && (
+              <div className="absolute z-20 top-[52px] w-full bg-white border border-[#0A84FF] rounded-xl shadow-xl overflow-hidden">
+                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search country or code" className="w-full h-[40px] px-3 border-b outline-none text-[13px] text-black" />
+                <div className="max-h-[220px] overflow-y-auto">
+                  {filtered.map(c=>(
+                    <button key={c.name} type="button" onClick={()=>{setSelectedCountry(c); setShowCountries(false);}} className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-[#F1F6FF] text-left">
+                      <span className="text-[18px]">{c.flag}</span><span className="text-[13px] flex-1 text-black">{c.name}</span><span className="text-[11px] font-bold text-[#0A84FF]">{c.code}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
-            <button onClick={()=>{setShowLinkModal(null); setStep(1);}} className="w-full mt-3 text-[11px] text-gray-500">Cancel</button>
           </div>
-        </div>
-      )}
+          <div className="h-[48px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]">
+            <input type={show?"text":"password"} value={password} onChange={e=>setPassword(e.target.value)} placeholder="Enter password" className="flex-1 bg-transparent outline-none text-[13.5px] text-black" />
+            <button type="button" onClick={()=>setShow(!show)} className="text-[12px]">{show?"🙈":"👁️"}</button>
+          </div>
+          <button type="submit" className="h-[48px] rounded-xl bg-[#0A84FF] text-white font-bold text-[16px] mt-2">Sign In</button>
+          <p className="text-center text-[11px] mt-3 text-black">Don't have account? <a href="/register" className="text-[#0A84FF] font-bold">Create account</a></p>
+        </form>
+      </div>
     </div>
   );
 }
