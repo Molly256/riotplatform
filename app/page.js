@@ -4,7 +4,7 @@ export default function Home(){
  return (
   <div className="min-h-screen bg-white flex flex-col items-center justify-center px-6">
    <h1 className="text-[32px] font-black text-[#0A84FF] tracking-wide leading-none">RIOT PLATFORM</h1>
-   <p className="text-[15px] font-bold text-[#0A84FF] mt-1">Stake with us.</p>
+   <p className="text-[15px] font-bold text-[#0A84FF] mt-1">Stake with us forever.</p>
    
    <Link 
      href="/register" 
