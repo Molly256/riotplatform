@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 const COUNTRIES = [
   { name:"Afghanistan", code:"+93", flag:"🇦🇫" }, { name:"Albania", code:"+355", flag:"🇦🇱" },
@@ -103,6 +104,7 @@ const COUNTRIES = [
 ].sort((a,b)=> a.name.localeCompare(b.name));
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES.find(c=>c.code==="+256") || COUNTRIES[0]);
   const [showCountries, setShowCountries] = useState(false);
   const [phone, setPhone] = useState("");
@@ -110,10 +112,14 @@ export default function RegisterPage() {
 
   const filtered = COUNTRIES.filter(c=> c.name.toLowerCase().includes(search.toLowerCase()) || c.code.includes(search));
 
+  const handleSignUp = () => {
+    // Save user temp if needed
+    // localStorage.setItem("registered", "true");
+    router.push("/login"); // REGISTER -> LOGIN
+  };
+
   return (
     <div className="min-h-screen bg-white flex flex-col items-center">
-      
-      {/* LOGO FULL WIDTH DISSOLVED - NO BOX */}
       <div className="w-full bg-white">
         <img src="/riot.png" alt="RIOT PLATFORM" className="w-full h-auto object-contain block mix-blend-multiply" />
       </div>
@@ -149,8 +155,7 @@ export default function RegisterPage() {
           <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]"><span>🔒</span><input type="password" placeholder="Enter password" className="flex-1 bg-transparent outline-none text-[14px] text-black" /></div>
           <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]"><span>🔒</span><input type="password" placeholder="Confirm password" className="flex-1 bg-transparent outline-none text-[14px] text-black" /></div>
 
-          {/* NORMAL SIGN UP - NO VERIFY NEEDED, NO GOOGLE/APPLE */}
-          <button onClick={()=>window.location.href="/dashboard"} className="h-[52px] rounded-xl bg-[#0A84FF] text-white font-bold text-[18px] mt-1">Sign Up</button>
+          <button onClick={handleSignUp} className="h-[52px] rounded-xl bg-[#0A84FF] text-white font-bold text-[18px] mt-1">Sign Up</button>
           <p className="text-center text-[12px] mt-3 text-black">Already have account? <a href="/login" className="text-[#0A84FF] font-bold">Login</a></p>
         </div>
       </div>

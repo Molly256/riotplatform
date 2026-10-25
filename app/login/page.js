@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 const COUNTRIES = [
   { name:"Afghanistan", code:"+93", flag:"🇦🇫" }, { name:"Albania", code:"+355", flag:"🇦🇱" },
@@ -103,6 +104,7 @@ const COUNTRIES = [
 ].sort((a,b)=> a.name.localeCompare(b.name));
 
 export default function LoginPage() {
+  const router = useRouter();
   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES.find(c=>c.code==="+256") || COUNTRIES[0]);
   const [showCountries, setShowCountries] = useState(false);
   const [search, setSearch] = useState("");
@@ -112,6 +114,11 @@ export default function LoginPage() {
 
   const filtered = COUNTRIES.filter(c=> c.name.toLowerCase().includes(search.toLowerCase()) || c.code.includes(search));
 
+  const handleLogin = (e) => {
+    e.preventDefault();
+    router.push("/dashboard"); // LOGIN -> DASHBOARD
+  };
+
   return (
     <div className="min-h-screen bg-white flex flex-col items-center">
       <div className="w-full bg-white">
@@ -120,7 +127,7 @@ export default function LoginPage() {
       <div className="w-full max-w-[340px] px-6 pb-10">
         <h2 className="text-[22px] font-extrabold text-black">Welcome back</h2>
         <p className="text-[12.5px] text-gray-600 mt-1">Login to RIOT PLATFORM</p>
-        <form onSubmit={e=>{e.preventDefault(); window.location.href="/dashboard";}} className="w-full mt-5 flex flex-col gap-3">
+        <form onSubmit={handleLogin} className="w-full mt-5 flex flex-col gap-3">
           <div className="relative">
             <div className="h-[48px] flex items-center rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]">
               <button type="button" onClick={()=>{setShowCountries(!showCountries); setSearch("");}} className="h-full px-3 flex items-center gap-1.5 bg-white border-r rounded-l-xl">
