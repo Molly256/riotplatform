@@ -4,12 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "NODE_OPTIONS=--max-old-space-size=8192 next build",
+    "build": "NODE_OPTIONS=--max-old-space-size=8192 next build --experimental-worker-threads",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
-    "next": "15.5.6",
+    "next": "15.5.9",
     "react": "19.1.1",
     "react-dom": "19.1.1"
   },
@@ -17,7 +17,7 @@
     "@tailwindcss/postcss": "^4.1.8",
     "autoprefixer": "^10.4.20",
     "eslint": "^9",
-    "eslint-config-next": "15.5.6",
+    "eslint-config-next": "15.5.9",
     "postcss": "^8.4.49",
     "tailwindcss": "^4.1.8"
   }
