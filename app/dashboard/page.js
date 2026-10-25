@@ -21,11 +21,11 @@ export default function DashboardPage() {
         <img src="/riot-header.png" alt="RIOT PLATFORM" className="w-full h-[90px] object-contain bg-white" />
       </div>
 
-      {/* SLIDER - Full width medium height auto */}
+      {/* SLIDER - Full width full height - NO CROP */}
       <div className="w-full bg-white">
-        <div className="w-full h-[220px] md:h-[340px] relative overflow-hidden">
+        <div className="w-full h-auto relative overflow-hidden bg-white">
           {slides.map((src,i) => (
-            <img key={i} src={src} alt="" className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${i===currentSlide?"opacity-100":"opacity-0"}`} />
+            <img key={i} src={src} alt="" className={`w-full h-auto object-contain bg-white transition-opacity duration-700 ${i===currentSlide?"relative opacity-100":"absolute inset-0 opacity-0"}`} />
           ))}
         </div>
         <div className="flex justify-center gap-2 py-3 bg-white">
