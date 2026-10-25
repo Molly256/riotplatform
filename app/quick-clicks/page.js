@@ -1,8 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
-import BottomNav from "../../components/BottomNav";
+import BottomNav from "@/components/BottomNav";
 import { useState } from "react";
 
 export default function QuickClicksPage() {
@@ -21,7 +20,6 @@ export default function QuickClicksPage() {
 
   return (
     <div className="min-h-screen bg-white flex flex-col">
-      {/* Banner - FULL WIDTH using riot.png */}
       <div className="w-full relative">
         <img
           src="/riot.png"
@@ -36,7 +34,6 @@ export default function QuickClicksPage() {
         </Link>
       </div>
 
-      {/* Quick Clicks - no big white space below */}
       <div className="flex-1 p-4 pb-[110px]">
         <h2 className="font-black text-[18px] mb-5">Quick Clicks</h2>
 
@@ -58,7 +55,6 @@ export default function QuickClicksPage() {
         </div>
       </div>
 
-      {/* BottomNav Visible */}
       <BottomNav active={active} setActive={setActive} />
     </div>
   );
