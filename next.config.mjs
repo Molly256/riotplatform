@@ -1,8 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  cacheComponents: false,
+  experimental: {
+    ppr: false,
+  },
+  images: {
+    unoptimized: true,
+  },
   turbopack: {
     rules: {
       "*.css": {
