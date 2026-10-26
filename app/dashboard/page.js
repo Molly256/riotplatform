@@ -3,16 +3,18 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect } from "react";
 import BottomNav from "@/components/BottomNav";
 
+// FIX 1: Move this array OUTSIDE of the DashboardPage function completely
+const SLIDES = ["/1.jpg","/2.jpg","/3.jpg","/4.jpg","/5.jpg","/6.jpg","/7.jpg","/8.jpg","/9.jpg"];
+
 export default function DashboardPage() {
   const [active, setActive] = useState("home");
   const [currentSlide, setCurrentSlide] = useState(0);
 
-  const slides = ["/1.jpg","/2.jpg","/3.jpg","/4.jpg","/5.jpg","/6.jpg","/7.jpg","/8.jpg","/9.jpg"];
-
   useEffect(() => {
-    const timer = setInterval(() => setCurrentSlide((p) => (p + 1) % slides.length), 3000);
+    // FIX 2: Reference the static SLIDES length instead of a re-created variable
+    const timer = setInterval(() => setCurrentSlide((p) => (p + 1) % SLIDES.length), 3000);
     return () => clearInterval(timer);
-  }, [slides.length]);
+  }, []); // Safe empty dependency array because SLIDES is static now
 
   return (
     <div className="min-h-screen bg-white pb-[100px]">
@@ -22,10 +24,11 @@ export default function DashboardPage() {
 
       <div className="w-full bg-white">
         <div className="w-full h-auto relative overflow-hidden bg-white">
-          <img key={currentSlide} src={slides[currentSlide]} alt="" className="w-full h-auto object-contain bg-white transition-opacity duration-700" />
+          {/* FIX 3: Update references to use SLIDES */}
+          <img key={currentSlide} src={SLIDES[currentSlide]} alt="" className="w-full h-auto object-contain bg-white transition-opacity duration-700" />
         </div>
         <div className="flex justify-center gap-2 py-3 bg-white">
-          {slides.map((_,i) => <div key={i} className={`h-2 rounded-full transition-all ${i===currentSlide?"w-6 bg-[#2ea8ff]":"w-2 bg-gray-300"}`} />)}
+          {SLIDES.map((_,i) => <div key={i} className={`h-2 rounded-full transition-all ${i===currentSlide?"w-6 bg-[#2ea8ff]":"w-2 bg-gray-300"}`} />)}
         </div>
       </div>
 
@@ -34,11 +37,11 @@ export default function DashboardPage() {
           <h2 className="text-[20px] font-black text-[#2ea8ff]">ABOUT US</h2>
         </div>
         <div className="text-[14px] leading-[1.7] text-gray-800 space-y-4 px-1">
-          <p>- Riot Platforms is mid-transformation from a pure-play bitcoin miner into a contracted AI data center landlord, and can be analyzed as three distinct businesses; in Q2 2026 it reported $174.2 million total revenue ($113.7 million mining, $37.3 million engineering, $23.2 million data center) and a $237.2 million GAAP net loss driven overwhelmingly by non-cash items, while mining still supplied roughly 65% of revenue [1][2].</p>
-          <p>- The transition is exists contractually but not yet delivered or financed: Riot has 241 MW of executed critical IT capacity (AMD 50 MW; a "leading frontier AI lab," reported by Bloomberg and independently confirmed by CNBC's David Faber to be Anthropic, 191 MW) representing about $9.8 billion of undiscounted contracted revenue, yet the first 96 MW of the flagship lease is not scheduled to energize until December 2027 and its investment-grade credit backstop is still being finalized [2][4][6][41].</p>
-          <p>- The core risks are financing and delivery, not demand: the 191 MW build alone implies roughly $2.1-$2.3 billion of capex against about $1.2 billion of liquidity (half of it bitcoin marked at spot); the equity is best understood as a call option on converting undiscounted headline contract values into financed, delivered, credit-backed net operating income [1][2][6].</p>
+          <p>- Riot Platforms is mid-transformation from a pure-play bitcoin miner into a contracted AI data center landlord, and can be analyzed as three distinct businesses; in Q2 2026 it reported $174.2 million total revenue ($113.7 million mining, $37.3 million engineering, $23.2 million data center) and a $237.2 million GAAP net loss driven overwhelmingly by non-cash items, while mining still supplied roughly 65% of revenue.</p>
+          <p>- The transition is exists contractually but not yet delivered or financed: Riot has 241 MW of executed critical IT capacity (AMD 50 MW; a "leading frontier AI lab," reported by Bloomberg and independently confirmed by CNBC's David Faber to be Anthropic, 191 MW) representing about $9.8 billion of undiscounted contracted revenue, yet the first 96 MW of the flagship lease is not scheduled to energize until December 2027 and its investment-grade credit backstop is still being finalized.</p>
+          <p>- The core risks are financing and delivery, not demand: the 191 MW build alone implies roughly $2.1-$2.3 billion of capex against about $1.2 billion of liquidity (half of it bitcoin marked at spot); the equity is best understood as a call option on converting undiscounted headline contract values into financed, delivered, credit-backed net operating income.</p>
           <h3 className="text-[18px] font-black text-[#2ea8ff] pt-2">Key Findings</h3>
-          <p>Riot Platforms is three businesses with three economic structures. The bitcoin mining operation earns volatile, unhedged revenue against a falling commodity price and rising global difficulty; the data center leasing operation earns contracted, long-duration, credit-dependent rent that has barely begun to flow; and the engineering segment earns project margin against a backlog that is now roughly 90% data-center work [1][2]. These carry different capital intensities, risk profiles, and valuation frameworks, and blending them into a single narrative would mislead.</p>
+          <p>Riot Platforms is three businesses with three economic structures. The bitcoin mining operation earns volatile, unhedged revenue against a falling commodity price and rising global difficulty; the data center leasing operation earns contracted, long-duration, credit-dependent rent that has barely begun to flow; and the engineering segment earns project margin against a backlog that is now roughly 90% data-center work. These carry different capital intensities, risk profiles, and valuation frameworks, and blending them into a single narrative would mislead.</p>
         </div>
       </div>
 
