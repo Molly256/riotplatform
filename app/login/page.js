@@ -101,7 +101,7 @@ const COUNTRIES = [
   { name:"Vatican City", code:"+379", flag:"🇻🇦" }, { name:"Venezuela", code:"+58", flag:"🇻🇪" },
   { name:"Vietnam", code:"+84", flag:"🇻🇳" }, { name:"Yemen", code:"+967", flag:"🇾🇪" },
   { name:"Zambia", code:"+260", flag:"🇿🇲" }, { name:"Zimbabwe", code:"+263", flag:"🇿🇼" },
-].sort((a,b)=> a.name.localeCompare(b.name));
+];
 
 export default function LoginPage() {
   const router = useRouter();
