@@ -22,9 +22,7 @@ export default function DashboardPage() {
 
       <div className="w-full bg-white">
         <div className="w-full h-auto relative overflow-hidden bg-white">
-          {slides.map((src,i) => (
-            <img key={i} src={src} alt="" className={`w-full h-auto object-contain bg-white transition-opacity duration-700 ${i===currentSlide?"relative opacity-100":"absolute inset-0 opacity-0"}`} />
-          ))}
+          <img key={currentSlide} src={slides[currentSlide]} alt="" className="w-full h-auto object-contain bg-white transition-opacity duration-700" />
         </div>
         <div className="flex justify-center gap-2 py-3 bg-white">
           {slides.map((_,i) => <div key={i} className={`h-2 rounded-full transition-all ${i===currentSlide?"w-6 bg-[#2ea8ff]":"w-2 bg-gray-300"}`} />)}
