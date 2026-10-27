@@ -3,8 +3,6 @@ import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { COUNTRIES } from "../lib/countries";
 
-export const dynamic = 'force-dynamic';
-
 export default function LoginPage() {
   const router = useRouter();
   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES.find(c=>c.code==="+256") || COUNTRIES[0]);
@@ -26,7 +24,7 @@ export default function LoginPage() {
       <div className="w-full max-w-[340px] px-6 pb-10">
         <h2 className="text-[22px] font-extrabold text-black">Welcome back</h2>
         <p className="text-[12.5px] text-gray-600 mt-1">Login to RIOT PLATFORM</p>
-        <form onSubmit={(e)=>{e.preventDefault(); router.push("/dashboard");}} className="w-full mt-5 flex flex-col gap-3">
+        <form onSubmit={(e)=>{e.preventDefault(); window.location.href = "/dashboard";}} className="w-full mt-5 flex flex-col gap-3">
           <div className="relative">
             <div className="h-[48px] flex items-center rounded-xl border-[1.5px] border-[#0A84FF] bg-[#F1F6FF]">
               <button type="button" onClick={()=>{setShowCountries(!showCountries); setSearch("");}} className="h-full px-3 flex items-center gap-1.5 bg-white border-r rounded-l-xl shrink-0">
