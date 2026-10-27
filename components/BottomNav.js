@@ -3,7 +3,7 @@
 export default function BottomNav({ active, setActive, fixed = true }) {
   const items = [
     { id: "home", label: "Home", emoji: "🏠", link: "/dashboard" },
-    { id: "quick", label: "Quick clicks", emoji: "⚡", link: "/quick" },
+    { id: "quick", label: "Quick clicks", emoji: "⚡", link: "/quick-clicks" },
     { id: "stake", label: "Stake", emoji: "💎", link: "/stake" },
     { id: "settings", label: "Settings", emoji: "⚙️", link: "/settings" },
   ];
