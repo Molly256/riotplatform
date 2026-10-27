@@ -14,10 +14,10 @@ export default function Home(){
        className="w-full max-w-[500px] h-auto object-contain"
      />
      
-     {/* BUTTON NOW IN PURPLE BOX SPOT - RIGHT UNDER LOGO */}
+     {/* BUTTON NOW LIFTED TO PURPLE BOX - EXACT SPACE */}
      <Link 
        href="/register" 
-       className="w-full max-w-[320px] h-[52px] bg-[#EBA043] text-black flex items-center justify-center rounded-xl font-black text-[16px] shadow-[0_4px_20px_rgba(235,160,67,0.5)] tracking-wide mt-8 active:scale-[0.98]"
+       className="w-full max-w-[320px] h-[52px] bg-[#EBA043] text-black flex items-center justify-center rounded-xl font-black text-[16px] shadow-[0_4px_20px_rgba(235,160,67,0.5)] tracking-wide -mt-[180px] active:scale-[0.98]"
      >
        GET STARTED
      </Link>
