@@ -8,6 +8,7 @@ export default function BottomNav({ active, setActive, fixed = true }) {
     { id: "home", label: "Home", emoji: "🏠", link: "/dashboard" },
     { id: "quick", label: "Quick clicks", emoji: "⚡", link: "/quick-clicks" },
     { id: "stake", label: "Stake", emoji: "💎", link: "/stake" },
+    { id: "mine", label: "Mine", emoji: "🙋‍♀️", link: "/mine" },
     { id: "settings", label: "Settings", emoji: "⚙️", link: "/settings" },
   ];
 
@@ -24,11 +25,9 @@ export default function BottomNav({ active, setActive, fixed = true }) {
             }}
             className={`flex flex-col items-center justify-center w-[75px] py-1 transition-all`}
           >
-            {/* Emoji with white circle so it shows well on gold */}
             <div className={`w-[32px] h-[32px] rounded-full flex items-center justify-center ${isActive ? "bg-white shadow-md" : "bg-white/70"}`}>
               <span className="text-[20px] leading-none">{item.emoji}</span>
             </div>
-            {/* Text - black for visibility, white when active */}
             <span className={`text-[10px] font-bold mt-1 tracking-wide ${isActive ? "text-white" : "text-black/80"}`}>
               {item.label}
             </span>

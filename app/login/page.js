@@ -11,10 +11,39 @@ export default function LoginPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const filtered = useMemo(() => {
     return COUNTRIES.filter(c=> c.name.toLowerCase().includes(search.toLowerCase()) || c.code.includes(search)).slice(0,50);
   }, [search]);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    if (!phone || !password) {
+      alert("Enter phone and password");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone,
+          password,
+          countryCode: selectedCountry.code,
+          fullPhone: `${selectedCountry.code}${phone}`
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Login failed");
+      router.push("/dashboard");
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#141414] flex flex-col items-center">
@@ -24,7 +53,7 @@ export default function LoginPage() {
       <div className="w-full max-w-[340px] px-6 pb-10">
         <h2 className="text-[22px] font-extrabold text-white">Welcome back</h2>
         <p className="text-[12.5px] text-white/60 mt-1">Login to RIOT PLATFORM</p>
-        <form onSubmit={(e)=>{e.preventDefault(); window.location.href = "/dashboard";}} className="w-full mt-5 flex flex-col gap-3">
+        <form onSubmit={handleLogin} className="w-full mt-5 flex flex-col gap-3">
           <div className="relative">
             <div className="h-[48px] flex items-center rounded-xl border-[1.5px] border-[#EBA043] bg-[#1E1E1E]">
               <button type="button" onClick={()=>{setShowCountries(!showCountries); setSearch("");}} className="h-full px-3 flex items-center gap-1.5 bg-[#262626] border-r border-[#EBA043]/30 rounded-l-xl shrink-0">
@@ -51,7 +80,9 @@ export default function LoginPage() {
               {show?"🙈":"👁️"}
             </button>
           </div>
-          <button type="submit" className="h-[48px] rounded-xl bg-[#EBA043] text-black font-black text-[16px] mt-2 shadow-[0_4px_12px_rgba(235,160,67,0.3)] active:bg-[#D18A32]">Sign In</button>
+          <button type="submit" disabled={loading} className="h-[48px] rounded-xl bg-[#EBA043] text-black font-black text-[16px] mt-2 shadow-[0_4px_12px_rgba(235,160,67,0.3)] active:bg-[#D18A32] disabled:opacity-60">
+            {loading ? "Signing In..." : "Sign In"}
+          </button>
           <p className="text-center text-[11px] mt-3 text-white">Don't have account? <a href="/register" className="text-[#EBA043] font-bold">Create account</a></p>
         </form>
       </div>

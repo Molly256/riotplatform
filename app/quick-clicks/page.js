@@ -10,12 +10,12 @@ export default function QuickClicksPage() {
   const items = [
     { label: "Deposit", emoji: "🏦", link: "/deposit" },
     { label: "Withdraw", emoji: "💵", link: "/withdraw" },
-    { label: "My stake", emoji: "💎", link: "/stake" },
+    { label: "My stake", emoji: "💎", link: "/mystake" },
     { label: "Transactions", emoji: "📑", link: "/transactions" },
     { label: "My team", emoji: "👨‍👩‍👧", link: "/team" },
-    { label: "Invite", emoji: "✉️", link: "/invite" },
+    { label: "Turbocharge", emoji: "🚀", link: "/turbocharge" },
     { label: "Lucky wheel", emoji: "🎯", link: "/lucky-wheel" },
-    { label: "Download app", emoji: "🚀", link: "/download" },
+    { label: "Download app", emoji: "📱", link: "/download" },
   ];
 
   return (
@@ -26,12 +26,10 @@ export default function QuickClicksPage() {
         <Link href="/" className="absolute top-3 left-3 bg-black/50 text-white w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-sm">←</Link>
       </div>
 
-      {/* GREEN BOX - Quick Clicks same left side, in green box position */}
       <div className="w-full bg-[#141414] px-4 pt-[28px] pb-[20px] shrink-0">
         <h2 className="font-bold text-[17px] text-white">Quick Clicks</h2>
       </div>
 
-      {/* FIRST BLUE BOX - First row */}
       <div className="w-full flex-1 bg-[#141414] px-4 flex items-center">
         <div className="w-full grid grid-cols-4 gap-x-3 gap-y-6">
           {items.slice(0, 4).map((item) => (
@@ -43,7 +41,6 @@ export default function QuickClicksPage() {
         </div>
       </div>
 
-      {/* LAST BLUE BOX - Second row */}
       <div className="w-full flex-1 bg-[#141414] px-4 flex items-center">
         <div className="w-full grid grid-cols-4 gap-x-3 gap-y-6">
           {items.slice(4, 8).map((item) => (
