@@ -88,7 +88,6 @@ export default function MinePage() {
 
           <h2 className="mt-4 text-[22px] font-bold text-white">{user.username}</h2>
           <p className="mt-1 text-[14px] text-white/50">ID: {user.userId}</p>
-          <Link href="/transactions" className="mt-3 text-[14px] text-[#EBA043]">Transaction History →</Link>
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-3">
