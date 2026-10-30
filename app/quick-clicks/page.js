@@ -19,7 +19,7 @@ export default function QuickClicksPage() {
   ];
 
   return (
-    <div className="h-[100dvh] w-full bg-[#141414] flex flex-col overflow-hidden">
+    <div className="min-h-screen w-full bg-[#141414] flex flex-col overflow-y-auto">
       
       <div className="w-full bg-[#141414] relative shrink-0">
         <img src="/riot.png" alt="Riot" className="w-full h-auto object-contain block" />
@@ -30,7 +30,7 @@ export default function QuickClicksPage() {
         <h2 className="font-bold text-[17px] text-white">Quick Clicks</h2>
       </div>
 
-      <div className="w-full flex-1 bg-[#141414] px-4 flex items-center">
+      <div className="w-full bg-[#141414] px-4 py-6">
         <div className="w-full grid grid-cols-4 gap-x-3 gap-y-6">
           {items.slice(0, 4).map((item) => (
             <Link key={item.label} href={item.link} className="flex flex-col items-center">
@@ -41,7 +41,7 @@ export default function QuickClicksPage() {
         </div>
       </div>
 
-      <div className="w-full flex-1 bg-[#141414] px-4 flex items-center">
+      <div className="w-full bg-[#141414] px-4 py-6">
         <div className="w-full grid grid-cols-4 gap-x-3 gap-y-6">
           {items.slice(4, 8).map((item) => (
             <Link key={item.label} href={item.link} className="flex flex-col items-center">
