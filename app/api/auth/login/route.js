@@ -1,36 +1,49 @@
 import { NextResponse } from "next/server";
-import twilio from "twilio";
+import { Redis } from "@upstash/redis";
 
-const client = twilio(
-  process.env.TWILIO_SID,
-  process.env.TWILIO_TOKEN
-);
+const redis = Redis.fromEnv();
 
 export async function POST(req) {
   try {
-    const { phone, password, countryCode } = await req.json();
+    const { phone, password, countryCode, fullPhone } = await req.json();
     
     if (!phone || !password) {
       return NextResponse.json({ error: "Phone and password required" }, { status: 400 });
     }
 
-    const fullPhone = `${countryCode}${phone}`; // e.g. +256772229389
+    const checkPhone = fullPhone || `${countryCode}${phone}`;
 
-    // TODO: Check your database here
-    // const user = await db.users.findOne({ phone: fullPhone })
-    // For now mock check:
-    if (password.length < 4) {
-      return NextResponse.json({ error: "Invalid password" }, { status: 401 });
+    // 1. Find userId by phone WITH rp: prefix
+    let userId = await redis.get(`rp:phone:${checkPhone}`);
+    if (!userId) userId = await redis.get(`rp:phone:${phone}`); // fallback
+
+    if (!userId) {
+      return NextResponse.json({ error: "User not found - register first" }, { status: 404 });
     }
 
-    // Optional: Send login alert via your US number
-    // await client.messages.create({
-    //   body: `RIOT LOGIN: ${fullPhone} just logged in`,
-    //   from: process.env.TWILIO_PHONE, // +17372508034
-    //   to: fullPhone
-    // });
+    // 2. Get user data WITH rp: prefix
+    const user = await redis.get(`rp:user:${userId}`);
+    if (!user) {
+      return NextResponse.json({ error: "User data corrupted" }, { status: 404 });
+    }
 
-    return NextResponse.json({ success: true, phone: fullPhone });
+    // 3. Check real password from Redis (what user registered with)
+    if (user.password !== password) {
+      return NextResponse.json({ error: "Wrong password" }, { status: 401 });
+    }
+
+    // 4. Success
+    return NextResponse.json({
+      success: true,
+      user: {
+        phone: user.phone,
+        username: user.username,
+        email: user.email,
+        userId: user.userId,
+        inviteCode: user.inviteCode,
+      }
+    });
+
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: e.message }, { status: 500 });

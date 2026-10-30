@@ -1,69 +1,71 @@
 import { NextResponse } from 'next/server';
+import { Redis } from '@upstash/redis';
 
-const getStore = () => {
-  if (!global.codeStore) global.codeStore = new Map();
-  return global.codeStore;
-};
+// Upstash auto reads from env
+const redis = Redis.fromEnv();
 
 export async function POST(req) {
   try {
-    const { phone, code, username, email, password } = await req.json();
+    const { phone, username, email, password } = await req.json();
 
-    if (!phone || !code || !username || !email || !password) {
-      return NextResponse.json(
-        { error: "All fields required" },
-        { status: 400 }
-      );
+    if (!phone || !username || !email || !password) {
+      return NextResponse.json({ error: "All fields required" }, { status: 400 });
     }
 
-    const store = getStore();
-    const record = store.get(phone);
-
-    if (!record) {
-      return NextResponse.json(
-        { error: "Please request code first" },
-        { status: 400 }
-      );
+    // 1. Check if phone/email/username already exists WITH rp: prefix
+    const existingPhone = await redis.get(`rp:phone:${phone}`);
+    if (existingPhone) {
+      return NextResponse.json({ error: "Phone already registered" }, { status: 400 });
+    }
+    const existingEmail = await redis.get(`rp:email:${email}`);
+    if (existingEmail) {
+      return NextResponse.json({ error: "Email already registered" }, { status: 400 });
+    }
+    const existingUsername = await redis.get(`rp:username:${username.toLowerCase()}`);
+    if (existingUsername) {
+      return NextResponse.json({ error: "Username taken" }, { status: 400 });
     }
 
-    if (Date.now() > record.expires) {
-      store.delete(phone);
-      return NextResponse.json(
-        { error: "Code expired, request new one" },
-        { status: 400 }
-      );
-    }
+    // 2. Generate UNIQUE userId + inviteCode
+    let userId, inviteCode;
+    let tries = 0;
+    do {
+      userId = Math.floor(10000 + Math.random() * 89999).toString();
+      tries++;
+    } while (await redis.exists(`rp:user:${userId}`) && tries < 10);
 
-    if (record.code !== code) {
-      return NextResponse.json({ error: "Invalid code" }, { status: 400 });
-    }
-
-    // CODE VALID - create real user
-    // TODO: Replace with your DB save
-    // Example: await prisma.user.create({ data: { phone, username, email, password: hashed } })
-
-    const userId = Math.floor(10000 + Math.random() * 89999).toString();
-    const inviteCode = Math.floor(100000 + Math.random() * 899999).toString();
-
-    // Clear code after use
-    store.delete(phone);
+    tries = 0;
+    do {
+      inviteCode = Math.floor(100000 + Math.random() * 899999).toString();
+      tries++;
+    } while (await redis.exists(`rp:invite:${inviteCode}`) && tries < 10);
 
     const user = {
       phone,
       username,
       email,
+      password, // TODO: hash with bcrypt later
       userId,
       inviteCode,
+      createdAt: Date.now(),
     };
 
-    console.log("New user registered:", user);
+    // 3. SAVE TO REDIS WITH rp: prefix - Main save
+    await redis.set(`rp:user:${userId}`, user);
+    await redis.set(`rp:phone:${phone}`, userId);
+    await redis.set(`rp:email:${email}`, userId);
+    await redis.set(`rp:username:${username.toLowerCase()}`, userId);
+    await redis.set(`rp:invite:${inviteCode}`, userId);
 
-    return NextResponse.json({
-      success: true,
-      user,
-    });
+    // Optional: Add to all users list
+    await redis.sadd("rp:all_users", userId);
+
+    console.log("New RIOT user saved to Upstash:", userId, inviteCode);
+
+    return NextResponse.json({ success: true, user });
+
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: "Server error" }, { status: 500 });
+    return NextResponse.json({ error: "Server error: " + err.message }, { status: 500 });
   }
 }
