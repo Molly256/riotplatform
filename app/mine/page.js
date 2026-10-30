@@ -49,26 +49,31 @@ export default function MinePage() {
     rd.readAsDataURL(file);
   };
 
-  const username = user?.username || "crypto_user_01";
-  const userId = user?.userId || "12894756";
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-[#101319] flex items-center justify-center pb-[90px]">
+        <div className="text-center">
+          <p className="text-white/60">Not logged in</p>
+          <Link href="/login" className="mt-3 inline-block px-6 py-2 rounded-full bg-[#EBA043] text-black font-bold">Login</Link>
+        </div>
+        <BottomNav />
+      </div>
+    );
+  }
 
   const items = [
-    { label: "Total Balance", value: "50,000 UGX" },
-    { label: "Total Power Deposited", value: "12,500 UGX" },
-    { label: "Total Withdraw", value: "0.00" },
-    { label: "Today's Yield", value: "1,240 UGX" },
-    { label: "Total Stake", value: "25,000 UGX" },
-    { label: "Total Team Commission", value: "3,200 UGX" },
-    { label: "Total Stake Yield", value: "2,100 UGX" },
-    { label: "Total Turbocharge", value: "0.00" },
+    { label: "Total Balance", value: "0.00 UGX" },
+    { label: "Total Power Deposited", value: "0.00 UGX" },
+    { label: "Total Withdraw", value: "0.00 UGX" },
+    { label: "Today's Yield", value: "0.00 UGX" },
+    { label: "Total Stake", value: "0.00 UGX" },
+    { label: "Total Team Commission", value: "0.00 UGX" },
+    { label: "Total Stake Yield", value: "0.00 UGX" },
+    { label: "Total Turbocharge", value: "0.00 UGX" },
   ];
 
   return (
-    <div className="min-h-screen bg-[#101319] pb-[90px]">
-      <div className="pt-4 pb-3 flex justify-center">
-        <h1 className="text-[32px] font-black text-white">My</h1>
-      </div>
-
+    <div className="min-h-screen bg-[#101319] pb-[90px] pt-4">
       <div className="mx-3 bg-[#1A1E2A] rounded-[20px] pt-8 pb-5 px-3">
         <div className="flex flex-col items-center">
           <label className="relative cursor-pointer">
@@ -81,8 +86,8 @@ export default function MinePage() {
             </div>
           </label>
 
-          <h2 className="mt-4 text-[22px] font-bold text-white">{username}</h2>
-          <p className="mt-1 text-[14px] text-white/50">ID: {userId}</p>
+          <h2 className="mt-4 text-[22px] font-bold text-white">{user.username}</h2>
+          <p className="mt-1 text-[14px] text-white/50">ID: {user.userId}</p>
           <Link href="/transactions" className="mt-3 text-[14px] text-[#EBA043]">Transaction History →</Link>
         </div>
 
