@@ -12,7 +12,7 @@ export default function QuickClicksPage() {
     { label: "Withdraw", emoji: "💵", link: "/withdraw" },
     { label: "My stake", emoji: "💎", link: "/mystake" },
     { label: "Transactions", emoji: "📑", link: "/transactions" },
-    { label: "My team", emoji: "👨‍👩‍👧", link: "/team" },
+    { label: "My team", emoji: "👨‍👩‍👧", link: "/myteam" },
     { label: "Turbocharge", emoji: "🚀", link: "/turbocharge" },
     { label: "Invite", emoji: "📨", link: "/invite" },
     { label: "Download app", emoji: "📱", link: "/download" },
