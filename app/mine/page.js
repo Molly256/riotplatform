@@ -153,6 +153,7 @@ export default function MinePage() {
 
   return (
     <div className="min-h-screen bg-[#101319] pb-[90px] pt-4">
+      <h1 className="text-[#EBA043] text-[26px] font-bold text-center mb-5">Mine</h1>
       <div className="mx-3 bg-[#1A1E2A] rounded-[20px] pt-8 pb-5 px-3">
         <div className="flex flex-col items-center">
           <label className="relative cursor-pointer">
@@ -176,15 +177,6 @@ export default function MinePage() {
               {it.sub && <p className="text-[10px] font-bold text-black/60">{it.sub}</p>}
             </div>
           ))}
-        </div>
-
-        <div className="mt-4 bg-[#242A3A] rounded-[15px] p-3 border border-[#EBA043]/20">
-          <p className="text-white/50 text-[11px]">Verified from Transactions</p>
-          <div className="flex justify-between mt-2">
-            <div><p className="text-white/40 text-[11px]">Turbo Left</p><p className="text-[#EBA043] font-black text-[16px]">{balances.totalTurbochargeWatts} W</p></div>
-            <div><p className="text-white/40 text-[11px]">Turbo Earned</p><p className="text-white font-black text-[16px]">{balances.totalTurboWattsEarned} W</p></div>
-            <div><p className="text-white/40 text-[11px]">To Balance</p><p className="text-white font-black text-[16px]">{balances.totalTurbochargeUGX.toLocaleString()}</p></div>
-          </div>
         </div>
       </div>
       <BottomNav />
