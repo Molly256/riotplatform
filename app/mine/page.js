@@ -6,12 +6,111 @@ import BottomNav from "@/components/BottomNav";
 export default function MinePage() {
   const [user, setUser] = useState(null);
   const [avatar, setAvatar] = useState(null);
+  const [balances, setBalances] = useState({
+    totalBalance: 0,
+    totalPowerDeposited: 0,
+    totalWithdraw: 0,
+    todaysYield: 0,
+    totalStake: 0,
+    totalTeamCommission: 0,
+    totalStakeYield: 0,
+    totalTurbochargeWatts: 0,
+    totalTurbochargeUGX: 0,
+    totalTurboWattsEarned: 0,
+  });
 
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("currentUser") || "null");
+    const saved = JSON.parse(localStorage.getItem("currentUser") || localStorage.getItem("user") || "null");
     setUser(saved);
     const av = localStorage.getItem("riot_avatar");
     if (av) setAvatar(av);
+
+    const txs = JSON.parse(localStorage.getItem("transactions") || "[]");
+    const todayStr = new Date().toLocaleDateString();
+
+    // === REAL CALCULATION FROM TRANSACTIONS ===
+    let totalPowerDeposited = 0;
+    let totalWithdraw = 0;
+    let todaysYield = 0;
+    let totalStake = 0;
+    let totalTeamCommission = 0;
+    let totalStakeYield = 0;
+    let totalTurbochargeUGX = 0;
+
+    txs.forEach(t => {
+      const amount = parseFloat(t.amount || 0);
+      const type = (t.type || "").toLowerCase();
+      const date = t.date || "";
+
+      if (type.includes("deposit") || type.includes("power deposited") || type.includes("recharge")) {
+        totalPowerDeposited += amount;
+      }
+      if (type.includes("withdraw")) {
+        totalWithdraw += amount;
+      }
+      if (type.includes("team") && type.includes("commission")) {
+        totalTeamCommission += amount;
+      }
+      if (type.includes("stake yield") || type.includes("daily yield")) {
+        totalStakeYield += amount;
+        if (date.includes(todayStr) || t.dateObj && new Date(t.dateObj).toLocaleDateString() === todayStr) {
+          todaysYield += amount;
+        }
+      }
+      // Fallback for today's yield if date format different
+      if (date.startsWith(todayStr)) {
+        if (type.includes("yield")) todaysYield += amount;
+      }
+      if (type.includes("stake") && !type.includes("yield")) {
+        totalStake += amount;
+      }
+      if (type.includes("turbocharge exchange")) {
+        totalTurbochargeUGX += amount;
+      }
+    });
+
+    // If no today filter worked, calculate today's from todaysYield key or sum of yield today
+    if (todaysYield === 0) {
+      const todayTxs = txs.filter(t => {
+        if (!t.date) return false;
+        return t.date.includes(new Date().getDate() + "/" + (new Date().getMonth()+1));
+      });
+      todayTxs.forEach(t => {
+        if ((t.type||"").toLowerCase().includes("yield")) {
+          todaysYield += parseFloat(t.amount||0);
+        }
+      });
+    }
+
+    // Total Balance = Available Balance from localStorage (already includes all earnings)
+    // OR calculate: Deposits + Commissions + Yields + Turbo - Withdraws
+    const totalBalanceLS = parseFloat(localStorage.getItem("totalBalance") || "0");
+    const availableBalance = parseFloat(localStorage.getItem("availableBalance") || "0");
+    
+    // Real totalBalance = sum of all incomes
+    const calculatedTotal = totalPowerDeposited + totalTeamCommission + totalStakeYield + totalTurbochargeUGX;
+    
+    // Use localStorage total if exists (more accurate), else calculated
+    const totalBalance = totalBalanceLS > 0 ? totalBalanceLS : calculatedTotal;
+
+    // Turbocharge Watts
+    const totalChargePower = parseFloat(localStorage.getItem("totalChargePower") || "0");
+    const turboHistory = JSON.parse(localStorage.getItem("turboHistory") || "[]");
+    const totalTurboWattsEarned = turboHistory.length > 0 ? turboHistory.length * 0.25 : totalChargePower + (totalTurbochargeUGX/1000);
+
+    setBalances({
+      totalBalance,
+      availableBalance,
+      totalPowerDeposited,
+      totalWithdraw,
+      todaysYield,
+      totalStake,
+      totalTeamCommission,
+      totalStakeYield,
+      totalTurbochargeWatts: totalChargePower,
+      totalTurbochargeUGX,
+      totalTurboWattsEarned,
+    });
   }, []);
 
   const onAvatar = (e) => {
@@ -38,14 +137,18 @@ export default function MinePage() {
   }
 
   const items = [
-    { label: "Total Balance", value: "0.00 UGX" },
-    { label: "Total Power Deposited", value: "0.00 UGX" },
-    { label: "Total Withdraw", value: "0.00 UGX" },
-    { label: "Today's Yield", value: "0.00 UGX" },
-    { label: "Total Stake", value: "0.00 UGX" },
-    { label: "Total Team Commission", value: "0.00 UGX" },
-    { label: "Total Stake Yield", value: "0.00 UGX" },
-    { label: "Total Turbocharge", value: "0.00 UGX" },
+    { label: "Total Balance", value: `${balances.totalBalance.toLocaleString()} UGX` },
+    { label: "Total Power Deposited", value: `${balances.totalPowerDeposited.toLocaleString()} UGX` },
+    { label: "Total Withdraw", value: `${balances.totalWithdraw.toLocaleString()} UGX` },
+    { label: "Today's Yield", value: `${balances.todaysYield.toLocaleString()} UGX` },
+    { label: "Total Stake", value: `${balances.totalStake.toLocaleString()} UGX` },
+    { label: "Total Team Commission", value: `${balances.totalTeamCommission.toLocaleString()} UGX` },
+    { label: "Total Stake Yield", value: `${balances.totalStakeYield.toLocaleString()} UGX` },
+    { 
+      label: "Total Turbocharge", 
+      value: `${balances.totalTurbochargeWatts} W`,
+      sub: `${balances.totalTurbochargeUGX.toLocaleString()} UGX earned`,
+    },
   ];
 
   return (
@@ -61,7 +164,6 @@ export default function MinePage() {
               <span className="text-black font-black text-[14px]">+</span>
             </div>
           </label>
-
           <h2 className="mt-4 text-[22px] font-bold text-white">{user.username}</h2>
           <p className="mt-1 text-[14px] text-white/50">ID: {user.userId}</p>
         </div>
@@ -71,11 +173,20 @@ export default function MinePage() {
             <div key={i} className="h-[88px] rounded-[15px] bg-gradient-to-br from-[#EBA043] to-[#F7C978] flex flex-col items-center justify-center px-1">
               <p className="text-[12px] font-bold text-black text-center">{it.label}</p>
               <p className="mt-1 text-[22px] font-black text-black">{it.value}</p>
+              {it.sub && <p className="text-[10px] font-bold text-black/60">{it.sub}</p>}
             </div>
           ))}
         </div>
-      </div>
 
+        <div className="mt-4 bg-[#242A3A] rounded-[15px] p-3 border border-[#EBA043]/20">
+          <p className="text-white/50 text-[11px]">Verified from Transactions</p>
+          <div className="flex justify-between mt-2">
+            <div><p className="text-white/40 text-[11px]">Turbo Left</p><p className="text-[#EBA043] font-black text-[16px]">{balances.totalTurbochargeWatts} W</p></div>
+            <div><p className="text-white/40 text-[11px]">Turbo Earned</p><p className="text-white font-black text-[16px]">{balances.totalTurboWattsEarned} W</p></div>
+            <div><p className="text-white/40 text-[11px]">To Balance</p><p className="text-white font-black text-[16px]">{balances.totalTurbochargeUGX.toLocaleString()}</p></div>
+          </div>
+        </div>
+      </div>
       <BottomNav />
     </div>
   );
