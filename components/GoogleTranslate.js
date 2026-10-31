@@ -9,13 +9,16 @@ export default function GoogleTranslate() {
     if (document.querySelector("#google-translate-script")) return;
 
     const style = document.createElement("style");
+    style.id = "google-translate-style";
     style.innerHTML = `
-      .goog-te-banner-frame.skiptranslate, .goog-te-banner-frame, .goog-te-ftab-float,
-      #goog-gt-tt, .goog-te-balloon-frame, .VIpgJd-ZVi9od-l4eHX-hSRGPd { display:none !important; }
-      body { top:0 !important; position:static !important; }
-      .goog-text-highlight { background:transparent !important; box-shadow:none !important; }
-      .goog-logo-link, .goog-te-gadget { display:none !important; }
-      #google_translate_element { display:none !important; }
+      .goog-te-banner-frame.skiptranslate { display: none !important; visibility: hidden !important; }
+      .goog-te-banner-frame { display: none !important; }
+      body { top: 0px !important; }
+      #goog-gt-tt, .goog-te-balloon-frame, .goog-te-ftab-float, .VIpgJd-ZVi9od-l4eHX-hSRGPd { display: none !important; }
+      .goog-logo-link, .goog-te-gadget { display: none !important; }
+      #google_translate_element { display: none !important; }
+      .goog-text-highlight { background-color: transparent !important; border: none !important; box-shadow: none !important; }
+      font { background-color: transparent !important; box-shadow: none !important; }
     `;
     document.head.appendChild(style);
 
@@ -34,6 +37,14 @@ export default function GoogleTranslate() {
     s.id = "google-translate-script";
     s.src = "//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
     document.body.appendChild(s);
+
+    // Force hide banner constantly
+    const observer = new MutationObserver(() => {
+      document.body.style.top = "0px";
+      const banner = document.querySelector(".goog-te-banner-frame");
+      if (banner) banner.style.display = "none";
+    });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true });
   }, []);
 
   useEffect(() => {
@@ -51,6 +62,7 @@ export default function GoogleTranslate() {
         select.value = appLang;
         select.dispatchEvent(new Event("change"));
         clearInterval(interval);
+        document.body.style.top = "0px";
       }
       if (attempts > 20) clearInterval(interval);
     }, 400);
@@ -58,5 +70,5 @@ export default function GoogleTranslate() {
     return () => clearInterval(interval);
   }, [pathname]);
 
-  return <div id="google_translate_element"></div>;
+  return <div id="google_translate_element" style={{display:"none"}}></div>;
 }
