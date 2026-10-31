@@ -7,19 +7,59 @@ export default function Page() {
   const [filter, setFilter] = useState("All");
 
   useEffect(() => {
-    const u = JSON.parse(localStorage.getItem("user") || "{}");
-    const userId = u.userId || localStorage.getItem("userId") || localStorage.getItem("rp_userId");
-    fetch("/api/transactions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId }),
-    }).then(r=>r.json()).then(j=>{ if(j.success) setTxs(j.txs) });
+    const load = async () => {
+      const u = JSON.parse(localStorage.getItem("user") || localStorage.getItem("currentUser") || "{}");
+      const userId = u.userId || localStorage.getItem("userId") || localStorage.getItem("rp_userId");
+      
+      let apiTxs = [];
+      try {
+        const r = await fetch("/api/transactions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId }),
+        });
+        const j = await r.json();
+        if(j.success) apiTxs = j.txs || [];
+      } catch {}
+
+      let localTxs = JSON.parse(localStorage.getItem("transactions") || "[]");
+      let all = [...apiTxs, ...localTxs];
+
+      // === FIX OLD USERS: if no registration, create 1000 ===
+      const hasReg = all.some(t=>{
+        const ty = (t.type||"").toLowerCase();
+        return ty.includes("regist") || ty.includes("bonus") || ty.includes("reward") || ty.includes("welcome") || ty.includes("signup");
+      });
+      if(!hasReg){
+        const now = new Date();
+        const ugDate = `${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+        const regTx = { type: "Registration Reward", amount: 1000, date: ugDate, dateObj: now.toISOString(), status: "Success" };
+        all.unshift(regTx);
+        localTxs.unshift(regTx);
+        localStorage.setItem("transactions", JSON.stringify(localTxs));
+      }
+
+      // Fix API txs with missing amount/type
+      all = all.map(t=>{
+        const ty = (t.type||"").toLowerCase();
+        if(!t.type || ty === "" ){
+          return {...t, type: "Registration Reward", amount: t.amount||1000, status: t.status||"Success"};
+        }
+        if((ty.includes("regist") || ty.includes("bonus") || ty.includes("reward")) && !t.amount){
+          return {...t, amount: 1000, type: "Registration Reward"};
+        }
+        return t;
+      });
+
+      setTxs(all);
+    };
+    load();
   }, []);
 
   const list = txs.filter(t=>{
     const type = (t.type || "").toLowerCase();
     if(filter==="All") return true;
-    if(filter==="Deposit") return type==="deposit";
+    if(filter==="Deposit") return type==="deposit" || type.includes("regist") || type.includes("bonus") || type.includes("reward");
     if(filter==="Withdraw") return type==="withdrawal" || type==="withdraw";
     if(filter==="Commission") return type.includes("team") || type==="commission";
     return true;
@@ -45,14 +85,19 @@ export default function Page() {
           let amount = "";
           let icon = "↓";
 
-          if(type==="deposit"){ label="Deposit"; amount=`${Number(tx.amount).toLocaleString()}UGX`; icon="↓"; }
+          if(type.includes("regist") || type.includes("signup") || type.includes("welcome") || type.includes("bonus") || type.includes("reward")){
+            label="Registration Reward"; 
+            amount=`${Number(tx.amount||1000).toLocaleString()}UGX`; 
+            icon="🎁";
+          }
+          else if(type==="deposit"){ label="Deposit"; amount=`${Number(tx.amount).toLocaleString()}UGX`; icon="↓"; }
           else if(type==="withdrawal" || type==="withdraw"){ label="Withdraw"; amount=`${Number(tx.amount).toLocaleString()}UGX`; icon="↑"; }
           else if(type.includes("team") || type==="commission"){ label="Commission"; amount=`${Number(tx.amount).toLocaleString()}UGX`; icon="◍"; }
           else if(type==="stake"){ label="Stake power"; amount=`${Number(tx.amount).toLocaleString()}UGX`; icon="🔒"; }
           else if(type.includes("yield")){ label="Today's yield"; amount=`${Number(tx.amount).toLocaleString()}UGX`; icon="🔒"; }
           else if(type.includes("turbo")){ label="Turbocharge"; const w=tx.power||tx.amount; amount=String(w).toUpperCase().includes('W')?String(w).toUpperCase():`${w}W`; icon="🔒"; }
+          else { label=tx.type||"Registration Reward"; amount=`${Number(tx.amount||1000).toLocaleString()}UGX`; icon="🎁"; }
 
-          // Uganda time D/M/Y Hr:min
           const raw = tx.dateObj || tx.date || new Date();
           const d = new Date(new Date(raw).toLocaleString("en-US", {timeZone: "Africa/Kampala"}));
           const date = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;

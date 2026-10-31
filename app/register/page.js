@@ -130,6 +130,7 @@ export default function RegisterPage() {
       if (!res.ok) throw new Error(data.error || "Signup failed");
 
       localStorage.setItem("currentUser", JSON.stringify(data.user));
+      localStorage.setItem("user", JSON.stringify(data.user));
       localStorage.setItem("inviteCode", data.user.inviteCode);
       localStorage.setItem("userId", data.user.userId);
       localStorage.removeItem("pendingRegister");
@@ -137,6 +138,27 @@ export default function RegisterPage() {
       sessionStorage.removeItem('referrer_code');
       localStorage.removeItem('referrer_code');
       localStorage.removeItem('referredBy');
+
+      // === FIX: CREATE REGISTRATION REWARD 1000 UGX FOR MINE + TX HISTORY ===
+      const now = new Date();
+      const ugDate = `${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+      const regTx = {
+        type: "Registration Reward",
+        amount: 1000,
+        date: ugDate,
+        dateObj: now.toISOString(),
+        status: "Success"
+      };
+      const existingTxs = JSON.parse(localStorage.getItem("transactions") || "[]");
+      const noDup = existingTxs.filter(t => {
+        const ty = (t.type||"").toLowerCase();
+        return !(ty.includes("regist") || ty.includes("bonus") || ty.includes("welcome") || ty.includes("signup"));
+      });
+      noDup.unshift(regTx);
+      localStorage.setItem("transactions", JSON.stringify(noDup));
+      localStorage.setItem("totalBalance", "1000");
+      localStorage.setItem("availableBalance", "1000");
+      // === END FIX ===
 
       setToast("Sign up successful");
       setTimeout(() => router.push("/login"), 1200);
