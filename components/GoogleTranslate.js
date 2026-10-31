@@ -6,31 +6,39 @@ export default function GoogleTranslate() {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (document.querySelector("#google-translate-script")) return;
+    if (document.querySelector("#google-translate-script")) {
+      document.body.style.top = "0px";
+      return;
+    }
 
+    // Inject CSS BEFORE script loads
     const style = document.createElement("style");
-    style.id = "google-translate-style";
+    style.id = "gt-hide-style";
     style.innerHTML = `
-      .goog-te-banner-frame.skiptranslate { display: none !important; visibility: hidden !important; }
-      .goog-te-banner-frame { display: none !important; }
-      body { top: 0px !important; }
-      #goog-gt-tt, .goog-te-balloon-frame, .goog-te-ftab-float, .VIpgJd-ZVi9od-l4eHX-hSRGPd { display: none !important; }
-      .goog-logo-link, .goog-te-gadget { display: none !important; }
-      #google_translate_element { display: none !important; }
-      .goog-text-highlight { background-color: transparent !important; border: none !important; box-shadow: none !important; }
-      font { background-color: transparent !important; box-shadow: none !important; }
+      iframe.goog-te-banner-frame, .goog-te-banner-frame.skiptranslate, .goog-te-banner-frame {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        width: 0 !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+      }
+      body { top: 0 !important; margin-top: 0 !important; position: static !important; }
+      html { margin-top: 0 !important; }
+      #goog-gt-tt, .goog-te-balloon-frame { display: none !important; }
+      .goog-te-ftab-float, .VIpgJd-ZVi9od-l4eHX-hSRGPd, .goog-logo-link { display: none !important; }
+      #google_translate_element, .goog-te-gadget { display: none !important; }
+      .goog-text-highlight { background: transparent !important; box-shadow: none !important; }
     `;
-    document.head.appendChild(style);
+    document.documentElement.appendChild(style);
 
     window.googleTranslateElementInit = () => {
       new window.google.translate.TranslateElement(
-        { 
-          pageLanguage: "en", 
-          includedLanguages: "en,sw,zh-CN,lg,fr,ar,es", 
-          autoDisplay: false 
-        },
+        { pageLanguage: "en", includedLanguages: "en,sw,zh-CN,lg,fr,ar,es", autoDisplay: false },
         "google_translate_element"
       );
+      // Immediate hide after init
+      setTimeout(() => { document.body.style.top = "0px"; }, 100);
     };
 
     const s = document.createElement("script");
@@ -38,37 +46,47 @@ export default function GoogleTranslate() {
     s.src = "//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
     document.body.appendChild(s);
 
-    // Force hide banner constantly
-    const observer = new MutationObserver(() => {
-      document.body.style.top = "0px";
-      const banner = document.querySelector(".goog-te-banner-frame");
-      if (banner) banner.style.display = "none";
-    });
-    observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+    // Aggressive observer - kills banner every 100ms
+    const killBanner = () => {
+      document.body.style.top = "0px !important";
+      document.documentElement.style.marginTop = "0px";
+      const banner = document.querySelector("iframe.goog-te-banner-frame");
+      if (banner) {
+        banner.style.display = "none";
+        banner.remove();
+      }
+      const skiptranslate = document.querySelector(".skiptranslate");
+      if (skiptranslate && skiptranslate.tagName === "IFRAME") {
+        skiptranslate.style.display = "none";
+      }
+    };
+
+    const interval = setInterval(killBanner, 100);
+    setTimeout(() => clearInterval(interval), 5000);
+
+    const observer = new MutationObserver(killBanner);
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+
   }, []);
 
   useEffect(() => {
     const appLang = localStorage.getItem("app_language") || "en";
     if (appLang === "en") return;
-
-    const googtransVal = "/en/" + appLang;
-    document.cookie = "googtrans=" + googtransVal + "; path=/;";
-
-    let attempts = 0;
-    const interval = setInterval(() => {
-      attempts++;
-      const select = document.querySelector(".goog-te-combo");
-      if (select) {
-        select.value = appLang;
-        select.dispatchEvent(new Event("change"));
-        clearInterval(interval);
+    const val = "/en/" + appLang;
+    document.cookie = "googtrans=" + val + "; path=/;";
+    let count = 0;
+    const iv = setInterval(() => {
+      count++;
+      const sel = document.querySelector(".goog-te-combo");
+      if (sel) {
+        sel.value = appLang;
+        sel.dispatchEvent(new Event("change"));
         document.body.style.top = "0px";
+        clearInterval(iv);
       }
-      if (attempts > 20) clearInterval(interval);
-    }, 400);
-
-    return () => clearInterval(interval);
+      if (count > 25) clearInterval(iv);
+    }, 300);
   }, [pathname]);
 
-  return <div id="google_translate_element" style={{display:"none"}}></div>;
+  return <div id="google_translate_element" style={{display:"none", height:0, width:0, overflow:"hidden"}}></div>;
 }
