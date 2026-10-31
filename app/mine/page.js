@@ -25,23 +25,22 @@ export default function MinePage() {
     const av = localStorage.getItem("riot_avatar");
     if (av) setAvatar(av);
 
+    // ONLY READ - DO NOT CREATE HERE. Register is the only trigger.
     let txs = JSON.parse(localStorage.getItem("transactions") || "[]");
 
-    // === FIX OLD USERS: auto-create registration 1000 if missing ===
-    const hasReg = txs.some(t=>{
+    // Dedupe for display if double exists from old code
+    let cleanTxs = [];
+    let hasReg = false;
+    for(const t of txs){
       const ty = (t.type||"").toLowerCase();
-      return ty.includes("regist") || ty.includes("bonus") || ty.includes("reward") || ty.includes("welcome") || ty.includes("signup");
-    });
-    if(!hasReg){
-      const now = new Date();
-      const ugDate = `${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-      txs.unshift({ type: "Registration Reward", amount: 1000, date: ugDate, dateObj: now.toISOString(), status: "Success" });
+      const isReg = ty.includes("regist") || ty.includes("bonus") || ty.includes("reward") || ty.includes("welcome") || ty.includes("signup");
+      if(isReg){
+        if(!hasReg){ hasReg=true; cleanTxs.push(t); }
+      } else cleanTxs.push(t);
+    }
+    if(cleanTxs.length !== txs.length){
+      txs = cleanTxs;
       localStorage.setItem("transactions", JSON.stringify(txs));
-      const curBal = parseFloat(localStorage.getItem("totalBalance")||"0");
-      if(curBal < 1000){
-        localStorage.setItem("totalBalance","1000");
-        localStorage.setItem("availableBalance","1000");
-      }
     }
 
     const todayStr = new Date().toLocaleDateString();
@@ -55,11 +54,11 @@ export default function MinePage() {
     let totalRegistrationReward = 0;
 
     txs.forEach(t => {
-      const amount = parseFloat(t.amount || 0) || 1000;
+      const amount = parseFloat(t.amount || 0) || 0;
       const type = (t.type || "").toLowerCase();
       const date = t.date || "";
       if (type.includes("regist") || type.includes("bonus") || type.includes("reward") || type.includes("signup") || type.includes("welcome")) {
-        totalRegistrationReward += amount;
+        totalRegistrationReward += amount || 1000;
       }
       if (type.includes("deposit") || type.includes("power deposited") || type.includes("recharge")) {
         totalPowerDeposited += amount;
@@ -85,7 +84,9 @@ export default function MinePage() {
     const availableBalance = parseFloat(localStorage.getItem("availableBalance") || "0");
     const calculatedTotal = totalPowerDeposited + totalTeamCommission + totalStakeYield + totalTurbochargeUGX + totalRegistrationReward;
     let totalBalance = calculatedTotal > 0 ? calculatedTotal : totalBalanceLS;
-    if(totalBalance < 1000) totalBalance = 1000;
+    // If user has registration reward, total should be at least 1000
+    if(totalRegistrationReward > 0 && totalBalance < 1000) totalBalance = 1000;
+    if(totalRegistrationReward === 0 && totalBalanceLS === 0) totalBalance = 0;
 
     const totalChargePower = parseFloat(localStorage.getItem("totalChargePower") || "0");
     const turboHistory = JSON.parse(localStorage.getItem("turboHistory") || "[]");
