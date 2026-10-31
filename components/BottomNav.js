@@ -10,8 +10,8 @@ export default function BottomNav({ active, setActive, fixed = true }) {
     { id: "quick", label: "Quick clicks", emoji: "⚡", link: "/quick-clicks" },
     { id: "stake", label: "Stake", emoji: "💎", link: "/stake" },
     { id: "mine", label: "Mine", emoji: "🙋‍♀️", link: "/mine" },
-    { id: "settings", label: "Settings", emoji: "⚙️", link: "/settings" },
-    // add these so your pages work
+    { id: "salary", label: "Salary", emoji: "💰", link: "/salary" },
+    // add these so your pages work (hidden from bottom bar)
     { id: "team", label: "Team", emoji: "👥", link: "/myteam" },
     { id: "history", label: "History", emoji: "📜", link: "/transactions" },
   ];
@@ -25,7 +25,7 @@ export default function BottomNav({ active, setActive, fixed = true }) {
     if (pathname?.includes("quick")) return "quick";
     if (pathname?.includes("stake")) return "stake";
     if (pathname?.includes("mine")) return "mine";
-    if (pathname?.includes("settings")) return "settings";
+    if (pathname?.includes("salary")) return "salary";
     return "home";
   };
 

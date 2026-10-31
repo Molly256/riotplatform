@@ -1,129 +1,95 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import BottomNav from "@/components/BottomNav";
 
+const LANGS = [
+  { code: "en", label: "English", flag: "🇬🇧", google: "en" },
+  { code: "sw", label: "Kiswahili", flag: "🇹🇿", google: "sw" },
+  { code: "zh", label: "Chinese", flag: "🇨🇳", google: "zh-CN" },
+  { code: "lg", label: "Luganda", flag: "🇺🇬", google: "lg" },
+  { code: "fr", label: "French", flag: "🇫🇷", google: "fr" },
+  { code: "ar", label: "Arabic", flag: "🇸🇦", google: "ar" },
+  { code: "es", label: "Spanish", flag: "🇪🇸", google: "es" },
+];
+
 export default function MinePage() {
+  const router = useRouter();
   const [user, setUser] = useState(null);
   const [avatar, setAvatar] = useState(null);
-  const [balances, setBalances] = useState({
-    totalBalance: 0,
-    totalPowerDeposited: 0,
-    totalWithdraw: 0,
-    todaysYield: 0,
-    totalStake: 0,
-    totalTeamCommission: 0,
-    totalStakeYield: 0,
-    totalTurbochargeWatts: 0,
-    totalTurbochargeUGX: 0,
-    totalTurboWattsEarned: 0,
-  });
+  const [balances, setBalances] = useState({ totalBalance: 0, totalPowerDeposited: 0, totalWithdraw: 0, todaysYield: 0, totalStake: 0, totalTeamCommission: 0, totalStakeYield: 0, totalTurbochargeWatts: 0, totalTurbochargeUGX: 0, totalTurboWattsEarned: 0 });
+  const [oldPass, setOldPass] = useState("");
+  const [newPass, setNewPass] = useState("");
+  const [confPass, setConfPass] = useState("");
+  const [toast, setToast] = useState("");
+  const [showLangs, setShowLangs] = useState(false);
+  const [showLogout, setShowLogout] = useState(false);
+  const [currentGoogleLang, setCurrentGoogleLang] = useState("en");
 
   useEffect(() => {
+    const savedLang = localStorage.getItem("app_language") || "en";
+    setCurrentGoogleLang(savedLang);
     const saved = JSON.parse(localStorage.getItem("currentUser") || localStorage.getItem("user") || "null");
     setUser(saved);
     const av = localStorage.getItem("riot_avatar");
     if (av) setAvatar(av);
-
-    // ONLY READ - DO NOT CREATE HERE. Register is the only trigger.
     let txs = JSON.parse(localStorage.getItem("transactions") || "[]");
-
-    // Dedupe for display if double exists from old code
-    let cleanTxs = [];
-    let hasReg = false;
-    for(const t of txs){
-      const ty = (t.type||"").toLowerCase();
-      const isReg = ty.includes("regist") || ty.includes("bonus") || ty.includes("reward") || ty.includes("welcome") || ty.includes("signup");
-      if(isReg){
-        if(!hasReg){ hasReg=true; cleanTxs.push(t); }
-      } else cleanTxs.push(t);
-    }
-    if(cleanTxs.length !== txs.length){
-      txs = cleanTxs;
-      localStorage.setItem("transactions", JSON.stringify(txs));
-    }
-
-    const todayStr = new Date().toLocaleDateString();
-    let totalPowerDeposited = 0;
-    let totalWithdraw = 0;
-    let todaysYield = 0;
-    let totalStake = 0;
-    let totalTeamCommission = 0;
-    let totalStakeYield = 0;
-    let totalTurbochargeUGX = 0;
-    let totalRegistrationReward = 0;
-
-    txs.forEach(t => {
-      const amount = parseFloat(t.amount || 0) || 0;
-      const type = (t.type || "").toLowerCase();
-      const date = t.date || "";
-      if (type.includes("regist") || type.includes("bonus") || type.includes("reward") || type.includes("signup") || type.includes("welcome")) {
-        totalRegistrationReward += amount || 1000;
-      }
-      if (type.includes("deposit") || type.includes("power deposited") || type.includes("recharge")) {
-        totalPowerDeposited += amount;
-      }
-      if (type.includes("withdraw")) totalWithdraw += amount;
-      if (type.includes("team") && type.includes("commission")) totalTeamCommission += amount;
-      if (type.includes("stake yield") || type.includes("daily yield")) {
-        totalStakeYield += amount;
-        if (date.includes(todayStr) || (t.dateObj && new Date(t.dateObj).toLocaleDateString() === todayStr)) todaysYield += amount;
-      }
-      if (date.startsWith(todayStr) && type.includes("yield")) todaysYield += amount;
-      if (type.includes("stake") && !type.includes("yield")) totalStake += amount;
-      if (type.includes("turbocharge exchange")) totalTurbochargeUGX += amount;
-    });
-
-    if (todaysYield === 0) {
-      txs.filter(t => t.date && t.date.includes(new Date().getDate() + "/" + (new Date().getMonth()+1))).forEach(t => {
-        if ((t.type||"").toLowerCase().includes("yield")) todaysYield += parseFloat(t.amount||0);
-      });
-    }
-
-    const totalBalanceLS = parseFloat(localStorage.getItem("totalBalance") || "0");
-    const availableBalance = parseFloat(localStorage.getItem("availableBalance") || "0");
-    const calculatedTotal = totalPowerDeposited + totalTeamCommission + totalStakeYield + totalTurbochargeUGX + totalRegistrationReward;
-    let totalBalance = calculatedTotal > 0 ? calculatedTotal : totalBalanceLS;
-    // If user has registration reward, total should be at least 1000
-    if(totalRegistrationReward > 0 && totalBalance < 1000) totalBalance = 1000;
-    if(totalRegistrationReward === 0 && totalBalanceLS === 0) totalBalance = 0;
-
-    const totalChargePower = parseFloat(localStorage.getItem("totalChargePower") || "0");
-    const turboHistory = JSON.parse(localStorage.getItem("turboHistory") || "[]");
-    const totalTurboWattsEarned = turboHistory.length > 0 ? turboHistory.length * 0.25 : totalChargePower + (totalTurbochargeUGX/1000);
-
-    setBalances({
-      totalBalance,
-      availableBalance,
-      totalPowerDeposited,
-      totalWithdraw,
-      todaysYield,
-      totalStake,
-      totalTeamCommission,
-      totalStakeYield,
-      totalTurbochargeWatts: totalChargePower,
-      totalTurbochargeUGX,
-      totalTurboWattsEarned,
-    });
+    let cleanTxs = []; let hasReg = false;
+    for(const tx of txs){ const ty=(tx.type||"").toLowerCase(); const isReg=ty.includes("regist")||ty.includes("bonus")||ty.includes("reward")||ty.includes("welcome")||ty.includes("signup"); if(isReg){ if(!hasReg){hasReg=true; cleanTxs.push(tx);} } else cleanTxs.push(tx);} if(cleanTxs.length!==txs.length){ txs=cleanTxs; localStorage.setItem("transactions", JSON.stringify(txs));}
+    const todayStr=new Date().toLocaleDateString(); let totalPowerDeposited=0,totalWithdraw=0,todaysYield=0,totalStake=0,totalTeamCommission=0,totalStakeYield=0,totalTurbochargeUGX=0,totalRegistrationReward=0;
+    txs.forEach(tx=>{ const amount=parseFloat(tx.amount||0)||0; const type=(tx.type||"").toLowerCase(); const date=tx.date||""; if(type.includes("regist")||type.includes("bonus")||type.includes("reward")||type.includes("signup")||type.includes("welcome")) totalRegistrationReward+=amount||1000; if(type.includes("deposit")||type.includes("power deposited")||type.includes("recharge")) totalPowerDeposited+=amount; if(type.includes("withdraw")) totalWithdraw+=amount; if(type.includes("team")&&type.includes("commission")) totalTeamCommission+=amount; if(type.includes("stake yield")||type.includes("daily yield")){ totalStakeYield+=amount; if(date.includes(todayStr)||(tx.dateObj&&new Date(tx.dateObj).toLocaleDateString()===todayStr)) todaysYield+=amount; } if(date.startsWith(todayStr)&&type.includes("yield")) todaysYield+=amount; if(type.includes("stake")&&!type.includes("yield")) totalStake+=amount; if(type.includes("turbocharge exchange")) totalTurbochargeUGX+=amount; });
+    if(todaysYield===0){ txs.filter(tx=>tx.date&&tx.date.includes(new Date().getDate()+"/"+(new Date().getMonth()+1))).forEach(tx=>{ if((tx.type||"").toLowerCase().includes("yield")) todaysYield+=parseFloat(tx.amount||0); });}
+    const totalBalanceLS=parseFloat(localStorage.getItem("totalBalance")||"0"); const availableBalance=parseFloat(localStorage.getItem("availableBalance")||"0"); const calculatedTotal=totalPowerDeposited+totalTeamCommission+totalStakeYield+totalTurbochargeUGX+totalRegistrationReward; let totalBalance=calculatedTotal>0?calculatedTotal:totalBalanceLS; if(totalRegistrationReward>0&&totalBalance<1000) totalBalance=1000; if(totalRegistrationReward===0&&totalBalanceLS===0) totalBalance=0;
+    const totalChargePower=parseFloat(localStorage.getItem("totalChargePower")||"0"); const turboHistory=JSON.parse(localStorage.getItem("turboHistory")||"[]"); const totalTurboWattsEarned=turboHistory.length>0?turboHistory.length*0.25:totalChargePower+(totalTurbochargeUGX/1000);
+    setBalances({ totalBalance, availableBalance, totalPowerDeposited, totalWithdraw, todaysYield, totalStake, totalTeamCommission, totalStakeYield, totalTurbochargeWatts: totalChargePower, totalTurbochargeUGX, totalTurboWattsEarned });
   }, []);
 
-  const onAvatar = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const rd = new FileReader();
-    rd.onload = () => { setAvatar(rd.result); localStorage.setItem("riot_avatar", rd.result); };
-    rd.readAsDataURL(file);
+  const onAvatar = (e)=>{ const file=e.target.files[0]; if(!file) return; const rd=new FileReader(); rd.onload=()=>{ setAvatar(rd.result); localStorage.setItem("riot_avatar", rd.result); }; rd.readAsDataURL(file); };
+
+  const handleSaveCredentials = async ()=>{
+    if(!oldPass||!newPass||!confPass){ setToast("Fill all fields"); setTimeout(()=>setToast(""),2000); return; }
+    if(newPass!==confPass){ setToast("New passwords don't match"); setTimeout(()=>setToast(""),2500); return; }
+    try{
+      const userId=user?.userId||localStorage.getItem("userId");
+      const res=await fetch("/api/auth/change-password", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId, oldPassword: oldPass, newPassword: newPass }) });
+      const data=await res.json();
+      if(!res.ok) throw new Error(data.error||"Invalid old password");
+      localStorage.setItem("user_password", newPass);
+      const curUser=JSON.parse(localStorage.getItem("currentUser")||"{}");
+      curUser.password=newPass;
+      localStorage.setItem("currentUser", JSON.stringify(curUser));
+      localStorage.setItem("user", JSON.stringify(curUser));
+      setToast("Saved successful");
+      setOldPass(""); setNewPass(""); setConfPass("");
+      setTimeout(()=>setToast(""),2000);
+    }catch(err){
+      setToast(err.message||"Invalid old password");
+      setTimeout(()=>setToast(""),2500);
+    }
   };
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-[#101319] flex items-center justify-center pb-[90px]">
-        <div className="text-center"><p className="text-white/60">Not logged in</p><Link href="/login" className="mt-3 inline-block px-6 py-2 rounded-full bg-[#EBA043] text-black font-bold">Login</Link></div><BottomNav />
-      </div>
-    );
-  }
+  const changeLangGoogle = (googleCode)=>{
+    const cookieVal=`/en/${googleCode}`;
+    document.cookie = `googtrans=${cookieVal}; path=/;`;
+    localStorage.setItem("googtrans", cookieVal);
+    localStorage.setItem("app_language", googleCode);
+    setCurrentGoogleLang(googleCode);
+    setShowLangs(false);
+    window.location.reload();
+  };
 
-  const items = [
+  const handleLogout = ()=>{
+    localStorage.removeItem("currentUser"); localStorage.removeItem("user"); localStorage.removeItem("userId"); localStorage.removeItem("inviteCode");
+    document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    localStorage.removeItem("googtrans");
+    localStorage.removeItem("app_language");
+    router.push("/login");
+  };
+
+  if(!user){ return (<div className="min-h-screen bg-[#101319] flex items-center justify-center pb-[90px]"><div className="text-center"><p className="text-white/60">Not logged in</p><Link href="/login" className="mt-3 inline-block px-6 py-2 rounded-full bg-[#EBA043] text-black font-bold">Login</Link></div><BottomNav /></div>); }
+
+  const items=[
     { label: "Total Balance", value: `${balances.totalBalance.toLocaleString()} UGX` },
     { label: "Total Power Deposited", value: `${balances.totalPowerDeposited.toLocaleString()} UGX` },
     { label: "Total Withdraw", value: `${balances.totalWithdraw.toLocaleString()} UGX` },
@@ -150,15 +116,50 @@ export default function MinePage() {
           <p className="mt-1 text-[14px] text-white/50">ID: {user.userId}</p>
         </div>
         <div className="mt-6 grid grid-cols-2 gap-3">
-          {items.map((it, i) => (
-            <div key={i} className="h-[88px] rounded-[15px] bg-gradient-to-br from-[#EBA043] to-[#F7C978] flex flex-col items-center justify-center px-1">
-              <p className="text-[12px] font-bold text-black text-center">{it.label}</p>
-              <p className="mt-1 text-[22px] font-black text-black">{it.value}</p>
-              {it.sub && <p className="text-[10px] font-bold text-black/60">{it.sub}</p>}
+          {items.map((it,i)=>(<div key={i} className="h-[88px] rounded-[15px] bg-gradient-to-br from-[#EBA043] to-[#F7C978] flex flex-col items-center justify-center px-1"><p className="text-[12px] font-bold text-black text-center">{it.label}</p><p className="mt-1 text-[22px] font-black text-black">{it.value}</p>{it.sub&&<p className="text-[10px] font-bold text-black/60">{it.sub}</p>}</div>))}
+        </div>
+
+        <div className="mt-8">
+          <h3 className="text-[#EBA043] text-[18px] font-black mb-3">Credential Modification</h3>
+          <div className="flex flex-col gap-3">
+            <input type="password" value={oldPass} onChange={e=>setOldPass(e.target.value)} placeholder="Input old password" className="h-[48px] w-full rounded-[12px] bg-[#151A28] border border-white/10 px-4 text-[14px] text-white placeholder:text-white/40 outline-none focus:border-[#EBA043]" />
+            <input type="password" value={newPass} onChange={e=>setNewPass(e.target.value)} placeholder="Input new password" className="h-[48px] w-full rounded-[12px] bg-[#151A28] border border-white/10 px-4 text-[14px] text-white placeholder:text-white/40 outline-none focus:border-[#EBA043]" />
+            <input type="password" value={confPass} onChange={e=>setConfPass(e.target.value)} placeholder="Confirm new password" className="h-[48px] w-full rounded-[12px] bg-[#151A28] border border-white/10 px-4 text-[14px] text-white placeholder:text-white/40 outline-none focus:border-[#EBA043]" />
+            <button onClick={handleSaveCredentials} className="h-[50px] w-full rounded-[12px] bg-[#EBA043] text-black font-black text-[15px]">Save credentials</button>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <button onClick={()=>setShowLangs(!showLangs)} className="h-[50px] w-full rounded-[12px] bg-[#EBA043] text-black font-black text-[15px]">🌐 Change language</button>
+          {showLangs && (
+            <div className="mt-3 bg-[#151A28] rounded-[14px] border border-white/10 overflow-hidden">
+              {LANGS.map(l=>(
+                <button key={l.google} onClick={()=>changeLangGoogle(l.google)} className={`w-full h-[48px] flex items-center justify-between px-4 hover:bg-white/5 ${currentGoogleLang===l.google?"bg-[#EBA043]/10":""}`}>
+                  <span className="text-white text-[14px] font-bold">{l.flag} {l.label}</span>
+                  {currentGoogleLang===l.google && <span className="text-[#EBA043]">✓</span>}
+                </button>
+              ))}
             </div>
-          ))}
+          )}
+        </div>
+
+        <div className="mt-4">
+          <button onClick={()=>setShowLogout(true)} className="h-[50px] w-full rounded-[12px] bg-[#EBA043] text-black font-black text-[15px]">🚪 Logout</button>
         </div>
       </div>
+
+      {showLogout && (
+        <div className="fixed inset-0 bg-black/70 z-[1000] flex items-center justify-center p-4">
+          <div className="w-full max-w-[320px] bg-[#1A1E2A] rounded-[18px] p-5 border border-white/10">
+            <h4 className="text-white text-[16px] font-bold text-center">Confirm Logout?</h4>
+            <div className="mt-5 flex gap-3">
+              <button onClick={()=>setShowLogout(false)} className="flex-1 h-[44px] rounded-[12px] bg-[#EBA043] text-black font-black text-[14px]">Stay</button>
+              <button onClick={handleLogout} className="flex-1 h-[44px] rounded-[12px] bg-[#C1272D] text-white font-black text-[14px]">Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {toast && <div className="fixed bottom-[90px] left-1/2 -translate-x-1/2 bg-black border border-[#EBA043] text-white text-[13px] font-bold px-6 py-3 rounded-[12px] z-[9999]">{toast}</div>}
       <BottomNav />
     </div>
   );
