@@ -6,39 +6,26 @@ export default function GoogleTranslate() {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (document.querySelector("#google-translate-script")) {
-      document.body.style.top = "0px";
-      return;
-    }
+    if (document.querySelector("#google-translate-script")) return;
 
-    // Inject CSS BEFORE script loads
-    const style = document.createElement("style");
-    style.id = "gt-hide-style";
-    style.innerHTML = `
-      iframe.goog-te-banner-frame, .goog-te-banner-frame.skiptranslate, .goog-te-banner-frame {
-        display: none !important;
-        visibility: hidden !important;
-        height: 0 !important;
-        width: 0 !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
-      }
-      body { top: 0 !important; margin-top: 0 !important; position: static !important; }
-      html { margin-top: 0 !important; }
-      #goog-gt-tt, .goog-te-balloon-frame { display: none !important; }
-      .goog-te-ftab-float, .VIpgJd-ZVi9od-l4eHX-hSRGPd, .goog-logo-link { display: none !important; }
-      #google_translate_element, .goog-te-gadget { display: none !important; }
-      .goog-text-highlight { background: transparent !important; box-shadow: none !important; }
+    // 1. CSS that kills everything before it appears
+    const css = `
+      .goog-te-banner-frame.skiptranslate, iframe.goog-te-banner-frame, .goog-te-banner-frame { display:none !important; }
+      body > .skiptranslate { display:none !important; }
+      body { top:0 !important; }
+      #goog-gt-tt, .goog-te-balloon-frame, .VIpgJd-ZVi9od-l4eHX-hSRGPd, .goog-te-ftab-float { display:none !important; }
+      #google_translate_element { display:none !important; }
+      .goog-text-highlight { background:transparent !important; box-shadow:none !important; }
     `;
-    document.documentElement.appendChild(style);
+    const style = document.createElement("style");
+    style.innerHTML = css;
+    document.head.appendChild(style);
 
     window.googleTranslateElementInit = () => {
       new window.google.translate.TranslateElement(
         { pageLanguage: "en", includedLanguages: "en,sw,zh-CN,lg,fr,ar,es", autoDisplay: false },
         "google_translate_element"
       );
-      // Immediate hide after init
-      setTimeout(() => { document.body.style.top = "0px"; }, 100);
     };
 
     const s = document.createElement("script");
@@ -46,47 +33,43 @@ export default function GoogleTranslate() {
     s.src = "//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
     document.body.appendChild(s);
 
-    // Aggressive observer - kills banner every 100ms
-    const killBanner = () => {
-      document.body.style.top = "0px !important";
-      document.documentElement.style.marginTop = "0px";
-      const banner = document.querySelector("iframe.goog-te-banner-frame");
-      if (banner) {
-        banner.style.display = "none";
-        banner.remove();
-      }
-      const skiptranslate = document.querySelector(".skiptranslate");
-      if (skiptranslate && skiptranslate.tagName === "IFRAME") {
-        skiptranslate.style.display = "none";
-      }
+    // 2. HARD KILL - remove any div that contains translate.google.com link
+    const kill = () => {
+      document.body.style.top = "0px";
+      // Kill the banner iframe
+      document.querySelectorAll("iframe.goog-te-banner-frame, .goog-te-banner-frame").forEach(el => el.remove());
+      // Kill the skiptranslate div at top of body (this is the one showing the link)
+      document.querySelectorAll("body > div.skiptranslate").forEach(el => {
+        if (el.id !== "google_translate_element") el.remove();
+      });
     };
 
-    const interval = setInterval(killBanner, 100);
-    setTimeout(() => clearInterval(interval), 5000);
-
-    const observer = new MutationObserver(killBanner);
-    observer.observe(document.documentElement, { childList: true, subtree: true });
-
+    // Run every 50ms for 10 seconds
+    const iv = setInterval(kill, 50);
+    setTimeout(() => clearInterval(iv), 10000);
+    
+    const obs = new MutationObserver(kill);
+    obs.observe(document.body, { childList: true, subtree: false });
   }, []);
 
   useEffect(() => {
-    const appLang = localStorage.getItem("app_language") || "en";
-    if (appLang === "en") return;
-    const val = "/en/" + appLang;
+    const lang = localStorage.getItem("app_language") || "en";
+    if (lang === "en") return;
+    const val = "/en/" + lang;
     document.cookie = "googtrans=" + val + "; path=/;";
-    let count = 0;
+    let n = 0;
     const iv = setInterval(() => {
-      count++;
+      n++;
       const sel = document.querySelector(".goog-te-combo");
       if (sel) {
-        sel.value = appLang;
+        sel.value = lang;
         sel.dispatchEvent(new Event("change"));
         document.body.style.top = "0px";
         clearInterval(iv);
       }
-      if (count > 25) clearInterval(iv);
+      if (n > 20) clearInterval(iv);
     }, 300);
   }, [pathname]);
 
-  return <div id="google_translate_element" style={{display:"none", height:0, width:0, overflow:"hidden"}}></div>;
+  return <div id="google_translate_element" style={{display:"none"}}></div>;
 }
