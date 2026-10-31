@@ -6,20 +6,24 @@ export default function GoogleTranslate() {
   const pathname = usePathname();
 
   useEffect(() => {
-    if (document.querySelector("#google-translate-script")) return;
+    if (window.googleTranslateLoaded) return;
+    window.googleTranslateLoaded = true;
 
-    // 1. CSS that kills everything before it appears
-    const css = `
-      .goog-te-banner-frame.skiptranslate, iframe.goog-te-banner-frame, .goog-te-banner-frame { display:none !important; }
-      body > .skiptranslate { display:none !important; }
-      body { top:0 !important; }
-      #goog-gt-tt, .goog-te-balloon-frame, .VIpgJd-ZVi9od-l4eHX-hSRGPd, .goog-te-ftab-float { display:none !important; }
-      #google_translate_element { display:none !important; }
-      .goog-text-highlight { background:transparent !important; box-shadow:none !important; }
-    `;
-    const style = document.createElement("style");
-    style.innerHTML = css;
-    document.head.appendChild(style);
+    const addStyle = () => {
+      if (document.getElementById("gt-style")) return;
+      const style = document.createElement("style");
+      style.id = "gt-style";
+      style.innerHTML = `
+        .goog-te-banner-frame.skiptranslate { display: none !important; }
+        body { top: 0px !important; }
+        .goog-te-gadget { display: none !important; }
+        #google_translate_element { display: none !important; }
+        .goog-te-balloon-frame { display: none !important; }
+        .goog-text-highlight { background: transparent !important; box-shadow: none !important; }
+      `;
+      document.head.appendChild(style);
+    };
+    addStyle();
 
     window.googleTranslateElementInit = () => {
       new window.google.translate.TranslateElement(
@@ -32,44 +36,43 @@ export default function GoogleTranslate() {
     s.id = "google-translate-script";
     s.src = "//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
     document.body.appendChild(s);
-
-    // 2. HARD KILL - remove any div that contains translate.google.com link
-    const kill = () => {
-      document.body.style.top = "0px";
-      // Kill the banner iframe
-      document.querySelectorAll("iframe.goog-te-banner-frame, .goog-te-banner-frame").forEach(el => el.remove());
-      // Kill the skiptranslate div at top of body (this is the one showing the link)
-      document.querySelectorAll("body > div.skiptranslate").forEach(el => {
-        if (el.id !== "google_translate_element") el.remove();
-      });
-    };
-
-    // Run every 50ms for 10 seconds
-    const iv = setInterval(kill, 50);
-    setTimeout(() => clearInterval(iv), 10000);
-    
-    const obs = new MutationObserver(kill);
-    obs.observe(document.body, { childList: true, subtree: false });
   }, []);
 
   useEffect(() => {
     const lang = localStorage.getItem("app_language") || "en";
+    
+    // Hide banner every time pathname changes
+    const hideBanner = () => {
+      document.body.style.top = "0px";
+      const banner = document.querySelector(".goog-te-banner-frame");
+      if (banner) banner.style.display = "none";
+    };
+    
+    const interval = setInterval(hideBanner, 500);
+    setTimeout(() => clearInterval(interval), 3000);
+
     if (lang === "en") return;
+    
     const val = "/en/" + lang;
     document.cookie = "googtrans=" + val + "; path=/;";
-    let n = 0;
+
+    let tries = 0;
     const iv = setInterval(() => {
-      n++;
-      const sel = document.querySelector(".goog-te-combo");
-      if (sel) {
-        sel.value = lang;
-        sel.dispatchEvent(new Event("change"));
+      tries++;
+      const combo = document.querySelector(".goog-te-combo");
+      if (combo) {
+        if (combo.value !== lang) {
+          combo.value = lang;
+          combo.dispatchEvent(new Event("change"));
+        }
         document.body.style.top = "0px";
         clearInterval(iv);
       }
-      if (n > 20) clearInterval(iv);
-    }, 300);
+      if (tries > 30) clearInterval(iv);
+    }, 500);
+
+    return () => clearInterval(iv);
   }, [pathname]);
 
-  return <div id="google_translate_element" style={{display:"none"}}></div>;
+  return <div id="google_translate_element"></div>;
 }
