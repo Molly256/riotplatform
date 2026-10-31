@@ -11,10 +11,19 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" translate="no" className="notranslate">
+      <head>
+        <meta name="google" content="notranslate" />
+        <style dangerouslySetInnerHTML={{__html: `
+          .goog-te-banner-frame.skiptranslate { display: none !important; }
+          body { top: 0 !important; }
+        `}} />
+      </head>
+      <body translate="no" className="notranslate">
         <GoogleTranslate />
-        {children}
+        <div className="translate">
+          {children}
+        </div>
       </body>
     </html>
   );
