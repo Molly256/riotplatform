@@ -5,42 +5,34 @@ export default function GoogleTranslate() {
   useEffect(() => {
     if (document.querySelector("#google-translate-script")) return;
 
-    // Hide Google banner and widget
     const style = document.createElement("style");
     style.innerHTML = `
-      .goog-te-banner-frame { display:none !important; }
-      .goog-te-gadget { font-size:0 !important; }
-      .goog-te-gadget span { display:none !important; }
-      #google_translate_element { display:none !important; }
-      body { top:0 !important; position: static !important; }
-      .VIpgJd-ZVi9od-l4eHX-hSRGPd { display:none !important; }
-      .goog-logo-link { display:none !important; }
-      .goog-te-combo { display:none !important; }
+      .goog-te-banner-frame.skiptranslate, .goog-te-banner-frame, .goog-te-ftab-float,
+      #goog-gt-tt, .goog-te-balloon-frame, .VIpgJd-ZVi9od-l4eHX-hSRGPd, .VIpgJd-ZVi9od-ORb3N,
+      .goog-logo-link, .goog-te-gadget, #google_translate_element { display:none !important; }
+      body { top:0 !important; position:static !important; }
+      .goog-text-highlight { background:transparent !important; box-shadow:none !important; }
     `;
     document.head.appendChild(style);
 
     window.googleTranslateElementInit = () => {
       new window.google.translate.TranslateElement(
-        {
-          pageLanguage: "en",
-          includedLanguages: "en,sw,zh-CN,lg,fr,ar,es",
-          autoDisplay: false,
-        },
+        { pageLanguage: "en", includedLanguages: "en,sw,zh-CN,lg,fr,ar,es", autoDisplay: false },
         "google_translate_element"
       );
     };
 
-    const script = document.createElement("script");
-    script.id = "google-translate-script";
-    script.src = "//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
-    document.body.appendChild(script);
+    const s = document.createElement("script");
+    s.id = "google-translate-script";
+    s.src = "//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
+    document.body.appendChild(s);
 
-    // Restore saved language on load
     const saved = localStorage.getItem("googtrans");
-    if (saved) {
-      document.cookie = `googtrans=${saved}; path=/;`;
-    }
+    if (saved) document.cookie = `googtrans=${saved}; path=/;`;
+
+    const obs = new MutationObserver(() => { document.body.style.top = "0px"; });
+    obs.observe(document.body, { childList: true, subtree: true });
   }, []);
 
-  return <div id="google_translate_element" style={{ display: "none" }}></div>;
+  return <div id="google_translate_element" style={{display:"none"}}></div>;
 }
