@@ -2,4 +2,25 @@
 
 body {
   background: white;
+  /* Prevent Google Translate from shifting your app layout down */
+  top: 0 !important;
+  position: static !important;
+}
+
+/* Hide the modern Google Translate iframe banner container */
+.VIpgJd-ZVi9od-ORHb-OEVmcd,
+.goog-te-banner-frame,
+.goog-te-banner {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  opacity: 0 !important;
+}
+
+/* Hide popups, tooltips, and widget widgets */
+.skiptranslate,
+#goog-gt-tt,
+.goog-te-balloon-frame {
+  display: none !important;
+  visibility: hidden !important;
 }
