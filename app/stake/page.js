@@ -10,6 +10,7 @@ export default function StakingPage() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [outOfStock, setOutOfStock] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const savedStock = JSON.parse(localStorage.getItem("outOfStock_daily") || "[]");
@@ -42,36 +43,79 @@ export default function StakingPage() {
     setShowConfirm(true);
   };
 
-  const confirmYes = () => {
-    const amount = selectedItem.stakePower;
-    const currentBal = parseInt(localStorage.getItem("availableBalance") || "0");
-    if (currentBal < amount) {
-      alert("Insufficient balance");
+  const confirmYes = async () => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const amount = selectedItem.stakePower;
+      const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
+      const userId = storedUser.userId || storedUser.id || localStorage.getItem("userId") || localStorage.getItem("rp_userId");
+      
+      if (!userId) {
+        alert("Please login again - userId not found");
+        setLoading(false);
+        setShowConfirm(false);
+        return;
+      }
+
+      const res = await fetch("/api/stake", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, power: amount, amount: amount, tab })
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        alert(data.message || "Stake failed");
+        setLoading(false);
+        setShowConfirm(false);
+        return;
+      }
+
+      // Update local balances from Redis
+      if (data.user) {
+        localStorage.setItem("user", JSON.stringify(data.user));
+        localStorage.setItem("availableBalance", String(data.user.availableBalance));
+        localStorage.setItem("totalBalance", String(data.user.totalBalance || data.user.balance));
+        localStorage.setItem("balance", String(data.user.balance));
+      }
+
+      // Save My Stake locally for instant UI (also saved in Redis)
+      const myStakes = JSON.parse(localStorage.getItem("myStakes") || '{"daily":[],"weekend":[],"hourly":[]}');
+      myStakes[tab].push({ ...selectedItem, stakedAt: new Date().toISOString(), idx: selectedIdx, countdown: "0/180", collectedDays: 0 });
+      localStorage.setItem("myStakes", JSON.stringify(myStakes));
+
+      // Save transactions locally for instant UI
+      const txs = JSON.parse(localStorage.getItem("transactions") || "[]");
+      const now = new Date();
+      const dateStr = `${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+      txs.unshift({ 
+        type: "Stake", 
+        amount: amount, 
+        status: "success", 
+        date: dateStr, 
+        dateStr: dateStr,
+        tab: tab,
+        display: `Stake success ${amount.toLocaleString()} UGX`
+      });
+      localStorage.setItem("transactions", JSON.stringify(txs));
+
+      const newStock = [...outOfStock, selectedIdx];
+      setOutOfStock(newStock);
+      localStorage.setItem("outOfStock_daily", JSON.stringify(newStock));
+
       setShowConfirm(false);
-      return;
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 1800);
+
+    } catch (e) {
+      console.error(e);
+      alert("Stake error: " + e.message);
+      setShowConfirm(false);
+    } finally {
+      setLoading(false);
     }
-    const newBal = currentBal - amount;
-    localStorage.setItem("availableBalance", newBal.toString());
-    const totalBal = parseInt(localStorage.getItem("totalBalance") || "0");
-    localStorage.setItem("totalBalance", (totalBal - amount).toString());
-
-    const txs = JSON.parse(localStorage.getItem("transactions") || "[]");
-    const now = new Date();
-    const dateStr = `${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
-    txs.unshift({ type: "Stake Power", amount: amount, status: "success", date: dateStr, tab: tab });
-    localStorage.setItem("transactions", JSON.stringify(txs));
-
-    const myStakes = JSON.parse(localStorage.getItem("myStakes") || '{"daily":[],"weekend":[],"hourly":[]}');
-    myStakes[tab].push({ ...selectedItem, stakedAt: new Date().toISOString(), idx: selectedIdx, countdown: "0/180", collectedDays: 0 });
-    localStorage.setItem("myStakes", JSON.stringify(myStakes));
-
-    const newStock = [...outOfStock, selectedIdx];
-    setOutOfStock(newStock);
-    localStorage.setItem("outOfStock_daily", JSON.stringify(newStock));
-
-    setShowConfirm(false);
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 1800);
   };
 
   return (
@@ -124,7 +168,7 @@ export default function StakingPage() {
           <div className="w-full max-w-[320px] bg-black border border-[#EBA043]/60 rounded-[18px] p-6 flex flex-col items-center">
             <p className="text-[#EBA043] text-[16px] font-bold text-center">Do you want to stake this generator?</p>
             <div className="flex gap-4 mt-6">
-              <button onClick={confirmYes} className="w-[90px] h-[38px] bg-[#EBA043] rounded-[10px] text-black font-extrabold text-[14px]">Yes</button>
+              <button onClick={confirmYes} disabled={loading} className="w-[90px] h-[38px] bg-[#EBA043] rounded-[10px] text-black font-extrabold text-[14px]">{loading ? "..." : "Yes"}</button>
               <button onClick={() => setShowConfirm(false)} className="w-[90px] h-[38px] bg-[#EBA043] rounded-[10px] text-black font-extrabold text-[14px]">No</button>
             </div>
           </div>

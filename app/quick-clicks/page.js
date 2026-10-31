@@ -14,7 +14,7 @@ export default function QuickClicksPage() {
     { label: "Transactions", emoji: "📑", link: "/transactions" },
     { label: "My team", emoji: "👨‍👩‍👧", link: "/team" },
     { label: "Turbocharge", emoji: "🚀", link: "/turbocharge" },
-    { label: "Lucky wheel", emoji: "🎯", link: "/lucky-wheel" },
+    { label: "Invite", emoji: "📨", link: "/invite" },
     { label: "Download app", emoji: "📱", link: "/download" },
   ];
 

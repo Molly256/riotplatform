@@ -1,31 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-
-function BottomNav() {
-  const path = usePathname();
-  return (
-    <div className="fixed bottom-0 left-0 right-0 h-[74px] bg-[#12151C] border-t border-white/[0.05] flex justify-around items-center z-50">
-      <Link href="/home" className={`flex flex-col items-center gap-1 ${path==="/home"?"text-[#EBA043]":"text-white/40"}`}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3L2 12h3v8h5v-6h4v6h5v-8h3L12 3z"/></svg>
-        <span className="text-[11px]">Home</span>
-      </Link>
-      <Link href="/market" className={`flex flex-col items-center gap-1 ${path==="/market"?"text-[#EBA043]":"text-white/40"}`}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h4v4H6zM11 6h4v4h-4zM16 6h2v4h-2zM6 11h4v4H6zM11 11h4v4h-4zM16 11h2v4h-2z"/></svg>
-        <span className="text-[11px]">Market</span>
-      </Link>
-      <Link href="/stake" className={`flex flex-col items-center gap-1 ${path==="/stake"?"text-[#EBA043]":"text-white/40"}`}>
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg>
-        <span className="text-[11px]">Stake</span>
-      </Link>
-      <Link href="/mine" className="flex flex-col items-center gap-1 text-[#EBA043]">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a5 5 0 100 10A5 5 0 0012 2zm0 12c-4 0-8 2-8 5v3h16v-3c0-3-4-5-8-5z"/></svg>
-        <span className="text-[11px] font-bold">My</span>
-      </Link>
-    </div>
-  );
-}
+import BottomNav from "@/components/BottomNav";
 
 export default function MinePage() {
   const [user, setUser] = useState(null);

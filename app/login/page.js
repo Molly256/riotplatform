@@ -8,7 +8,7 @@ export default function LoginPage() {
   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES.find(c=>c.code==="+256") || COUNTRIES[0]);
   const [showCountries, setShowCountries] = useState(false);
   const [search, setSearch] = useState("");
-  const [phone, setPhone] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -19,24 +19,41 @@ export default function LoginPage() {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!phone || !password) {
-      alert("Enter phone and password");
+    if (!identifier || !password) {
+      alert("Enter phone/email/username and password");
       return;
     }
     setLoading(true);
     try {
+      const trimmed = identifier.trim();
+      const isPhoneOnlyDigits = /^[0-9]+$/.test(trimmed);
+      const isEmail = trimmed.includes('@');
+      
+      let fullPhone = null;
+      if (isPhoneOnlyDigits) {
+        fullPhone = `${selectedCountry.code}${trimmed}`;
+      }
+
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phone,
+          identifier: trimmed,
+          phone: isPhoneOnlyDigits ? trimmed : null,
+          fullPhone,
+          email: isEmail ? trimmed : null,
+          username: !isPhoneOnlyDigits && !isEmail ? trimmed : null,
           password,
           countryCode: selectedCountry.code,
-          fullPhone: `${selectedCountry.code}${phone}`
         })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Login failed");
+      
+      localStorage.setItem("currentUser", JSON.stringify(data.user));
+      if (data.user.inviteCode) localStorage.setItem("inviteCode", data.user.inviteCode);
+      if (data.user.userId) localStorage.setItem("userId", data.user.userId);
+      
       router.push("/dashboard");
     } catch (err) {
       alert(err.message);
@@ -59,7 +76,12 @@ export default function LoginPage() {
               <button type="button" onClick={()=>{setShowCountries(!showCountries); setSearch("");}} className="h-full px-3 flex items-center gap-1.5 bg-[#262626] border-r border-[#EBA043]/30 rounded-l-xl shrink-0">
                 <span className="text-[18px]">{selectedCountry.flag}</span><span className="text-[12px] font-bold text-white">{selectedCountry.code}</span><span className="text-[8px] text-white">▼</span>
               </button>
-              <input value={phone} onChange={e=>setPhone(e.target.value.replace(/[^0-9]/g,""))} placeholder="772 229 389" className="flex-1 h-full bg-transparent px-3 outline-none text-[13.5px] text-white placeholder:text-white/40" />
+              <input 
+                value={identifier} 
+                onChange={e=>setIdentifier(e.target.value)} 
+                placeholder="Phone / Email / Username" 
+                className="flex-1 h-full bg-transparent px-3 outline-none text-[13.5px] text-white placeholder:text-white/40" 
+              />
             </div>
             {showCountries && (
               <div className="absolute z-50 top-[52px] w-full bg-[#1E1E1E] border border-[#EBA043] rounded-xl shadow-xl overflow-hidden">

@@ -1,13 +1,13 @@
 "use client";
 import { useState, useMemo, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { COUNTRIES } from "../lib/countries";
-// REMOVED FIREBASE IMPORTS
 
 export const dynamic = 'force-dynamic';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [selectedCountry, setSelectedCountry] = useState(COUNTRIES.find(c=>c.code==="+256") || COUNTRIES[0]);
   const [showCountries, setShowCountries] = useState(false);
   const [phone, setPhone] = useState("");
@@ -17,6 +17,8 @@ export default function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPass, setShowPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
 
   const [codeInput, setCodeInput] = useState("");
   const [showCodeArea, setShowCodeArea] = useState(false);
@@ -27,6 +29,9 @@ export default function RegisterPage() {
   const [toast, setToast] = useState("");
   const [sending, setSending] = useState(false);
   const timerRef = useRef(null);
+
+  const [inviteCode, setInviteCode] = useState("");
+  const [isLocked, setIsLocked] = useState(false);
 
   const filtered = useMemo(() => {
     return COUNTRIES.filter(c=> c.name.toLowerCase().includes(search.toLowerCase()) || c.code.includes(search)).slice(0,50);
@@ -55,6 +60,23 @@ export default function RegisterPage() {
   }, []);
 
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlRef = searchParams.get('ref') || searchParams.get('code')
+      const code = urlRef ||
+                   sessionStorage.getItem('activeInviterCode') || 
+                   sessionStorage.getItem('referrer_code') || 
+                   localStorage.getItem('referrer_code') ||
+                   localStorage.getItem('referredBy')
+      if (code) {
+        setInviteCode(code.replace(/\D/g,'').slice(0,6))
+        setIsLocked(true)
+        sessionStorage.setItem('activeInviterCode', code)
+        localStorage.setItem('referrer_code', code)
+      }
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     const data = { phone, username, email, password, attempts, showCodeArea, codeInput, lockUntil, selectedCountry, timerEnd: timer > 0 ? Date.now() + timer * 1000 : 0 };
     localStorage.setItem("pendingRegister", JSON.stringify(data));
   }, [phone, username, email, password, attempts, showCodeArea, codeInput, lockUntil, timer, selectedCountry]);
@@ -73,9 +95,6 @@ export default function RegisterPage() {
     return () => clearTimeout(timerRef.current);
   }, [timer, locked, lockUntil]);
 
-  // REMOVED: setupRecaptcha, handleVerify, handleResend - FIREBASE ONLY
-
-  // REGISTER WITHOUT FIREBASE - DIRECT TO YOUR API
   const handleSignUp = async () => {
     if (!phone || phone.length < 7) {
       setToast("Enter valid phone number");
@@ -92,16 +111,20 @@ export default function RegisterPage() {
       setTimeout(()=>setToast(""),2000);
       return;
     }
+    if (!inviteCode || !/^\d{6}$/.test(inviteCode)) {
+      setToast("Invite code required - must be 6 digits");
+      setTimeout(()=>setToast(""),3000);
+      return;
+    }
 
     setSending(true);
     try {
       const fullPhone = selectedCountry.code + phone;
 
-      // Directly create user - NO OTP CHECK
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: fullPhone, username, email, password })
+        body: JSON.stringify({ phone: fullPhone, username, email, password, inviterCode: inviteCode })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Signup failed");
@@ -110,6 +133,10 @@ export default function RegisterPage() {
       localStorage.setItem("inviteCode", data.user.inviteCode);
       localStorage.setItem("userId", data.user.userId);
       localStorage.removeItem("pendingRegister");
+      sessionStorage.removeItem('activeInviterCode');
+      sessionStorage.removeItem('referrer_code');
+      localStorage.removeItem('referrer_code');
+      localStorage.removeItem('referredBy');
 
       setToast("Sign up successful");
       setTimeout(() => router.push("/login"), 1200);
@@ -124,8 +151,6 @@ export default function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-[#141414] flex flex-col items-center">
-      {/* REMOVED recaptcha-container */}
-
       <div className="w-full bg-[#141414]">
         <img src="/riot.png" alt="RIOT PLATFORM" className="w-full h-auto object-contain block" />
       </div>
@@ -158,8 +183,29 @@ export default function RegisterPage() {
 
           <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#EBA043] bg-[#1E1E1E]"><span>👤</span><input value={username} onChange={e=>setUsername(e.target.value)} placeholder="Enter username" className="flex-1 bg-transparent outline-none text-[14px] text-white placeholder:text-white/40" /></div>
           <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#EBA043] bg-[#1E1E1E]"><span>✉️</span><input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Enter email" className="flex-1 bg-transparent outline-none text-[14px] text-white placeholder:text-white/40" /></div>
-          <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#EBA043] bg-[#1E1E1E]"><span>🔒</span><input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Enter password" className="flex-1 bg-transparent outline-none text-[14px] text-white placeholder:text-white/40" /></div>
-          <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#EBA043] bg-[#1E1E1E]"><span>🔒</span><input type="password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} placeholder="Confirm password" className="flex-1 bg-transparent outline-none text-[14px] text-white placeholder:text-white/40" /></div>
+          
+          <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#EBA043] bg-[#1E1E1E]">
+            <span>🔒</span>
+            <input type={showPass ? "text" : "password"} value={password} onChange={e=>setPassword(e.target.value)} placeholder="Enter password" className="flex-1 bg-transparent outline-none text-[14px] text-white placeholder:text-white/40" />
+            <button type="button" onClick={()=>setShowPass(!showPass)} className="text-[18px] shrink-0">{showPass ? "🙈" : "👁️"}</button>
+          </div>
+          <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#EBA043] bg-[#1E1E1E]">
+            <span>🔒</span>
+            <input type={showConfirmPass ? "text" : "password"} value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} placeholder="Confirm password" className="flex-1 bg-transparent outline-none text-[14px] text-white placeholder:text-white/40" />
+            <button type="button" onClick={()=>setShowConfirmPass(!showConfirmPass)} className="text-[18px] shrink-0">{showConfirmPass ? "🙈" : "👁️"}</button>
+          </div>
+
+          <div className="h-[50px] flex items-center gap-3 px-4 rounded-xl border-[1.5px] border-[#EBA043] bg-[#1E1E1E]">
+            <span>🎟️</span>
+            <input 
+              value={inviteCode} 
+              onChange={e=>{ setInviteCode(e.target.value.replace(/\D/g,'').slice(0,6)); if(isLocked) setIsLocked(false) }} 
+              placeholder="Invite code (6 digits)" 
+              className="flex-1 bg-transparent outline-none text-[14px] placeholder:text-white/40"
+              style={{color: isLocked ? '#EBA043' : '#fff', fontWeight: isLocked ? '900' : '400'}}
+            />
+            {isLocked && <span className="text-[10px] font-black text-[#EBA043]">LOCKED</span>}
+          </div>
 
           <button onClick={handleSignUp} disabled={sending} className="h-[52px] rounded-xl bg-[#EBA043] text-black font-black text-[18px] mt-1 active:bg-[#D18A32] shadow-[0_4px_12px_rgba(235,160,67,0.3)] disabled:opacity-50">
             {sending ? "Processing..." : "Sign Up"}
