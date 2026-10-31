@@ -1,78 +1,70 @@
-"use client";
-import { useEffect } from "react";
-import { usePathname } from "next/navigation";
+'use client'
+import { useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 
-export default function GoogleTranslate() {
+export default function GoogleTranslate({ children }) {
   const pathname = usePathname();
 
-  useEffect(() => {
-    if (window.googleTranslateLoaded) return;
-    window.googleTranslateLoaded = true;
-
-    const addStyle = () => {
-      if (document.getElementById("gt-style")) return;
-      const style = document.createElement("style");
-      style.id = "gt-style";
-      style.innerHTML = `
-        .goog-te-banner-frame.skiptranslate { display: none !important; }
-        body { top: 0px !important; }
-        .goog-te-gadget { display: none !important; }
-        #google_translate_element { display: none !important; }
-        .goog-te-balloon-frame { display: none !important; }
-        .goog-text-highlight { background: transparent !important; box-shadow: none !important; }
-      `;
-      document.head.appendChild(style);
-    };
-    addStyle();
+  useEffect(()=>{
+    if(!document.querySelector('#google-translate-script')){
+      const s = document.createElement('script')
+      s.id = 'google-translate-script'
+      s.src = '//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit'
+      document.body.appendChild(s)
+    }
 
     window.googleTranslateElementInit = () => {
       new window.google.translate.TranslateElement(
-        { pageLanguage: "en", includedLanguages: "en,sw,zh-CN,lg,fr,ar,es", autoDisplay: false },
-        "google_translate_element"
-      );
-    };
+        { pageLanguage: 'en', autoDisplay: false },
+        'google_translate_element'
+      )
+      const saved = localStorage.getItem('app_language')
+      if(saved && saved !== 'en'){
+        setTimeout(()=>{
+          const sel = document.querySelector('.goog-te-combo')
+          if(sel){
+            sel.value = saved
+            sel.dispatchEvent(new Event('change'))
+          }
+        },800)
+      }
+    }
 
-    const s = document.createElement("script");
-    s.id = "google-translate-script";
-    s.src = "//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
-    document.body.appendChild(s);
-  }, []);
+    if (document.querySelector('#gt-hide-style')) return;
+    const style = document.createElement('style')
+    style.id = 'gt-hide-style'
+    style.innerHTML = `
+      .goog-te-banner-frame{display:none!important}
+      body{top:0!important}
+      #google_translate_element{display:none!important}
+      .goog-te-gadget-icon{display:none!important}
+      .goog-te-gadget{display:none!important}
+      #goog-gt-tt, .goog-te-balloon-frame{display:none!important}
+      .goog-text-highlight{background:transparent!important; box-shadow:none!important}
+    `
+    document.head.appendChild(style)
+  },[])
 
   useEffect(() => {
-    const lang = localStorage.getItem("app_language") || "en";
-    
-    // Hide banner every time pathname changes
-    const hideBanner = () => {
-      document.body.style.top = "0px";
-      const banner = document.querySelector(".goog-te-banner-frame");
-      if (banner) banner.style.display = "none";
-    };
-    
-    const interval = setInterval(hideBanner, 500);
-    setTimeout(() => clearInterval(interval), 3000);
-
-    if (lang === "en") return;
-    
-    const val = "/en/" + lang;
-    document.cookie = "googtrans=" + val + "; path=/;";
-
-    let tries = 0;
+    const saved = localStorage.getItem('app_language');
+    if(!saved || saved === 'en') return;
+    let t=0;
     const iv = setInterval(() => {
-      tries++;
-      const combo = document.querySelector(".goog-te-combo");
-      if (combo) {
-        if (combo.value !== lang) {
-          combo.value = lang;
-          combo.dispatchEvent(new Event("change"));
-        }
-        document.body.style.top = "0px";
+      t++;
+      const sel = document.querySelector('.goog-te-combo');
+      if(sel){
+        sel.value = saved;
+        sel.dispatchEvent(new Event('change'));
         clearInterval(iv);
       }
-      if (tries > 30) clearInterval(iv);
+      if(t>20) clearInterval(iv);
     }, 500);
-
-    return () => clearInterval(iv);
   }, [pathname]);
 
-  return <div id="google_translate_element"></div>;
+  return (
+    <>
+      <div id="google_translate_element" style={{display:'none'}}></div>
+      {children}
+    </>
+  )
 }

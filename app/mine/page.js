@@ -28,7 +28,7 @@ export default function MinePage() {
   const [currentLang, setCurrentLang] = useState("en");
 
   useEffect(() => {
-    const savedLang = localStorage.getItem("app_language") || "en";
+    const savedLang = localStorage.getItem("app_language") || localStorage.getItem("app_lang") || "en";
     setCurrentLang(savedLang);
 
     const saved = JSON.parse(localStorage.getItem("currentUser") || localStorage.getItem("user") || "null");
@@ -65,21 +65,27 @@ export default function MinePage() {
     }catch(err){ setToast(err.message||"Invalid old password"); setTimeout(()=>setToast(""),2500); }
   };
 
+  const triggerTranslate = (target) => {
+    const sel = document.querySelector('.goog-te-combo');
+    if(!sel){ setTimeout(()=>triggerTranslate(target),500); return; }
+    sel.value = target;
+    sel.dispatchEvent(new Event('change'));
+  };
+
   const changeLangGoogle = (code)=>{
     localStorage.setItem("app_language", code);
-    if(code === "en"){
-      document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-      document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=." + window.location.hostname + ";";
-      localStorage.removeItem("googtrans");
-    } else {
-      const val = "/en/" + code;
-      localStorage.setItem("googtrans", val);
-      document.cookie = "googtrans=" + val + "; path=/;";
-      document.cookie = "googtrans=" + val + "; path=/; domain=." + window.location.hostname + ";";
-    }
+    localStorage.setItem("app_lang", code);
     setCurrentLang(code);
     setShowLangs(false);
-    window.location.reload();
+    
+    if(code === "en"){
+      document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
+      document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.${window.location.hostname};`;
+      localStorage.removeItem("googtrans");
+      window.location.reload();
+    } else {
+      triggerTranslate(code);
+    }
   };
 
   const handleLogout = ()=>{
