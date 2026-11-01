@@ -13,12 +13,15 @@ export default function WithdrawMethod() {
   const [amount, setAmount] = useState('')
   const [toast, setToast] = useState(false)
   const [toastMsg, setToastMsg] = useState('')
+  const [loading, setLoading] = useState(false)
 
   const isMTN = method === 'mtn'
   const title = isMTN ? 'MTN Mobile Money' : 'Airtel Money Uganda'
 
   useEffect(()=>{
-    setBalance(localStorage.getItem('riot_balance') || '0')
+    const riotUser = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}')
+    const bal = riotUser.totalBalance || riotUser.balance || localStorage.getItem('riot_balance') || '0'
+    setBalance(String(bal))
   },[])
 
   const fee = amount ? Math.floor(Number(amount) * 0.1) : 0
@@ -36,7 +39,7 @@ export default function WithdrawMethod() {
     return new Date(ugandaStr)
   }
 
-  function confirmWithdraw(){
+  async function confirmWithdraw(){
     const ugTime = getUgandaTime()
     const day = ugTime.getDay()
     const hour = ugTime.getHours()
@@ -51,47 +54,36 @@ export default function WithdrawMethod() {
     if(!walletNumber) return triggerToast('Enter Wallet number')
     if(Number(amount) > Number(balance)) return triggerToast('Insufficient balance')
 
-    const txs = JSON.parse(localStorage.getItem('riot_transactions') || '[]')
-    const today = ugTime.toDateString()
-    const alreadyWithdrawnToday = txs.some(tx => {
-      if(tx.type !== 'withdraw') return false
-      const txDate = new Date(tx.fullDate || tx.date)
-      const txUgandaStr = txDate.toLocaleString('en-US', { timeZone: 'Africa/Kampala' })
-      const txUgandaDate = new Date(txUgandaStr).toDateString()
-      return txUgandaDate === today && (tx.status === 'pending' || tx.status === 'success')
-    })
-    if(alreadyWithdrawnToday) return triggerToast('Only can withdraw once a day')
+    setLoading(true)
+    try{
+      const riotUser = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}')
+      const userId = riotUser.userId || localStorage.getItem('userId') || riotUser.id
+      const phone = riotUser.phone || ''
+      const username = riotUser.username || ''
 
-    // === FIX: DEDUCT FROM TOTAL BALANCE IMMEDIATELY (Mine page) ===
-    const currentBal = Number(localStorage.getItem('riot_balance') || '0')
-    const newBalance = currentBal - Number(amount) // deduct 2000
-    localStorage.setItem('riot_balance', String(newBalance))
-    // Also update any other balance key your Mine page might use
-    if(localStorage.getItem('total_balance')) localStorage.setItem('total_balance', String(newBalance))
-    if(localStorage.getItem('balance')) localStorage.setItem('balance', String(newBalance))
-    setBalance(String(newBalance))
+      if(!userId){ triggerToast('Login again'); setLoading(false); return; }
 
-    // === FIX: PENDING SHOWS NET 1800 ===
-    const newTx = {
-      id: Date.now(),
-      type: 'withdraw',
-      method: title,
-      holderName,
-      wallet: walletNumber,
-      amount: receive, // show 1800 in pending, not 2000
-      originalAmount: amount,
-      fee,
-      receive,
-      status: 'pending',
-      date: ugTime.toLocaleString(),
-      fullDate: new Date().toISOString(),
+      const res = await fetch('/api/withdraw',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ userId, phone, username, amount, holderName, walletNumber, method: title, fee, receive })
+      })
+      const j = await res.json()
+      if(!j.success){ triggerToast(j.error); setLoading(false); return; }
+
+      // update local balance
+      localStorage.setItem('riot_balance', String(j.newBalance))
+      const updatedUser = {...riotUser, totalBalance: j.newBalance, balance: j.newBalance}
+      localStorage.setItem('riot_user', JSON.stringify(updatedUser))
+      localStorage.setItem('user', JSON.stringify(updatedUser))
+      setBalance(String(j.newBalance))
+
+      triggerToast('Withdraw pending - receive '+j.tx.receive+' UGX')
+      setTimeout(()=>router.push('/transactions'), 1200)
+    }catch(e){
+      triggerToast('Error '+e.message)
     }
-    txs.unshift(newTx)
-    localStorage.setItem('riot_transactions', JSON.stringify(txs))
-    localStorage.setItem('riot_last_withdraw_date', today)
-
-    triggerToast('Withdraw success')
-    setTimeout(()=>router.push('/transactions'), 1200)
+    setLoading(false)
   }
 
   return (
@@ -122,7 +114,7 @@ export default function WithdrawMethod() {
             {amount && <div className="mt-1 text-[#8A8D98] text-[11px] font-bold">You will receive: {receive} UGX</div>}
           </div>
         </div>
-        <button onClick={confirmWithdraw} className="w-full mt-6 py-4 bg-[#EBA043] text-black font-black rounded-[12px] text-[16px]">Confirm Withdraw</button>
+        <button disabled={loading} onClick={confirmWithdraw} className="w-full mt-6 py-4 bg-[#EBA043] text-black font-black rounded-[12px] text-[16px] disabled:opacity-60">{loading?'Processing...':'Confirm Withdraw'}</button>
         <div className="mt-8">
           <p className="text-[#EBA043] font-black text-[15px] mb-2">Withdraw rules</p>
           <div className="text-[#8A8D98] text-[13px] font-bold leading-6">
