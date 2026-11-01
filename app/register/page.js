@@ -27,7 +27,7 @@ export default function RegisterPage() {
   const [locked, setLocked] = useState(false);
   const [lockUntil, setLockUntil] = useState(0);
   const [toast, setToast] = useState("");
-  const [toastType, setToastType] = useState("default"); // orange / default
+  const [toastType, setToastType] = useState("default");
   const [sending, setSending] = useState(false);
   const timerRef = useRef(null);
 
@@ -133,7 +133,6 @@ export default function RegisterPage() {
       
       if (!res.ok || !data.success) {
         const msg = data.message || data.error || "Signup failed";
-        // === ORANGE TOAST FOR IP + VPN ===
         if (data.error === 'IP_EXISTS' || data.error === 'VPN_DETECTED' || msg.toLowerCase().includes('same ip') || msg.toLowerCase().includes('vpn')) {
           showToast(msg, "orange");
         } else {
@@ -143,8 +142,11 @@ export default function RegisterPage() {
         return;
       }
 
+      // === FIX FOR ADMIN PANEL ===
       localStorage.setItem("currentUser", JSON.stringify(data.user));
       localStorage.setItem("user", JSON.stringify(data.user));
+      localStorage.setItem("riot_user", JSON.stringify(data.user)); // <-- added for QuickClicks admin check
+      localStorage.setItem("booksforward_user", JSON.stringify(data.user));
       localStorage.setItem("inviteCode", data.user.inviteCode);
       localStorage.setItem("userId", data.user.userId);
       localStorage.removeItem("pendingRegister");

@@ -10,10 +10,34 @@ export default function QuickClicksPage() {
 
   useEffect(() => {
     try {
-      const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('booksforward_user') || '{}');
-      const phones = ['0753520252', '+256753520252', '256753520252'];
-      if (phones.includes(u.phone)) setIsAdmin(true);
-    } catch {}
+      // Check ALL possible storage keys
+      const raw = localStorage.getItem('riot_user') || 
+                  localStorage.getItem('currentUser') || 
+                  localStorage.getItem('user') || 
+                  localStorage.getItem('booksforward_user') || '{}';
+      const u = JSON.parse(raw);
+      
+      console.log("QuickClicks user:", u); // debug
+
+      // Your admin phones - all formats
+      const adminPhones = [
+        '0753520252', 
+        '+256753520252', 
+        '256753520252',
+        '+256753520252'.replace('+',''),
+        '753520252'
+      ];
+      
+      const phone = String(u.phone || u.userId || '').replace(/\s/g,'');
+      // also check last 9 digits
+      const last9 = phone.slice(-9);
+      
+      if (adminPhones.includes(phone) || last9 === '753520252' || u.isAdmin || u.role === 'admin') {
+        setIsAdmin(true);
+      }
+    } catch (e) {
+      console.log(e);
+    }
   }, []);
 
   const items = [

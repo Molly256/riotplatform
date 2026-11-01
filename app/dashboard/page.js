@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import BottomNav from "@/components/BottomNav";
+import SupportWidget from "@/components/SupportWidget";
 
 const SLIDES = ["/1.jpg","/2.jpg","/3.jpg","/4.jpg","/5.jpg","/6.jpg","/7.jpg","/8.jpg","/9.jpg"];
 
@@ -8,7 +9,6 @@ export default function DashboardPage() {
   const [active, setActive] = useState("home");
   const [currentSlide, setCurrentSlide] = useState(0);
 
-  // FIX LAG: Preload all 9 images instantly on mount
   useEffect(() => {
     SLIDES.forEach((src) => {
       const img = new Image();
@@ -16,7 +16,6 @@ export default function DashboardPage() {
     });
   }, []);
 
-  // FIX LAG: Auto slide immediately, no delay on tab
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide((p) => (p + 1) % SLIDES.length);
@@ -32,7 +31,6 @@ export default function DashboardPage() {
 
       <div className="w-full bg-[#141414]">
         <div className="w-full h-auto relative overflow-hidden bg-[#141414]">
-          {/* FIX LAG: Keep all images loaded, show instantly */}
           {SLIDES.map((src, i) => (
             <img
               key={src}
@@ -74,6 +72,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      <SupportWidget />
       <BottomNav active={active} setActive={setActive} />
     </div>
   );
