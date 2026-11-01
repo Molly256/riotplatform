@@ -37,8 +37,29 @@ export default function Admin() {
   const ADMIN_PHONES = ['0753520252', '+256753520252', '256753520252']
 
   useEffect(() => {
-    const localUser = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('booksforward_user') || '{}')
-    if (!ADMIN_PHONES.includes(localUser.phone)) { router.push('/dashboard'); return }
+    const raw = localStorage.getItem('riot_user') 
+             || localStorage.getItem('booksforward_user')
+             || localStorage.getItem('user')
+             || localStorage.getItem('riot:user')
+             || localStorage.getItem(`${P}user`)
+             || '{}'
+    let localUser = {}
+    try { localUser = JSON.parse(raw) } catch {}
+    
+    const normalize = (p='') => {
+      let s = String(p).replace(/\s/g,'')
+      if (s.startsWith('+256')) s = '0' + s.slice(4)
+      if (s.startsWith('256')) s = '0' + s.slice(3)
+      return s
+    }
+    
+    const phone = normalize(localUser.phone || localUser.phoneNumber || '')
+    const isAdmin = ADMIN_PHONES.map(normalize).includes(phone)
+
+    if (!phone || !isAdmin) { 
+      router.push('/dashboard'); 
+      return 
+    }
     setUser(localUser)
     loadPending()
     loadHistories()

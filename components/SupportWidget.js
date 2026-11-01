@@ -9,8 +9,7 @@ export default function SupportWidget() {
   const hasMoved = useRef(false);
 
   useEffect(() => {
-    // start position bottom right but above bottomnav
-    setPos({ x: window.innerWidth - 72, y: window.innerHeight - 180 });
+    setPos({ x: window.innerWidth - 72, y: window.innerHeight - 200 });
   }, []);
 
   const onStart = (e) => {
@@ -27,8 +26,13 @@ export default function SupportWidget() {
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const newX = clientX - startPos.current.x;
     const newY = clientY - startPos.current.y;
-    hasMoved.current = true;
-    setPos({ x: newX, y: newY });
+    if (Math.abs(newX - pos.x) > 3 || Math.abs(newY - pos.y) > 3) {
+      hasMoved.current = true;
+    }
+    // keep inside screen, above nav
+    const clampedX = Math.max(8, Math.min(window.innerWidth - 64, newX));
+    const clampedY = Math.max(8, Math.min(window.innerHeight - 140, newY));
+    setPos({ x: clampedX, y: clampedY });
   };
 
   const onEnd = () => {
@@ -63,26 +67,26 @@ export default function SupportWidget() {
 
   return (
     <>
-      {/* Draggable Button */}
       <button
         onMouseDown={onStart}
         onTouchStart={onStart}
         onClick={handleClick}
         style={{ left: pos.x, top: pos.y }}
-        className={`fixed z-[40] w-[56px] h-[56px] rounded-full bg-[#EBA043] shadow-xl flex items-center justify-center text-[28px] border-2 border-black transition select-none ${dragging ? 'scale-110 cursor-grabbing' : 'cursor-grab'}`}
+        className={`fixed z-[9998] w-[56px] h-[56px] rounded-full bg-[#EBA043] shadow-xl flex items-center justify-center text-[28px] border-2 border-black select-none touch-none ${dragging ? 'scale-110 cursor-grabbing' : 'cursor-grab'}`}
       >
         🎧
       </button>
 
-      {/* Panel - fixed, not draggable */}
       {open && (
-        <div className="fixed bottom-[20px] right-4 z-[41] w-[300px] rounded-[20px] overflow-hidden shadow-2xl border-2 border-[#EBA043] bg-black">
+        <div className="fixed z-[9999] w-[300px] max-w-[90vw] max-h-[65vh] rounded-[20px] overflow-hidden shadow-2xl border-2 border-[#EBA043] bg-black
+        bottom-[105px] right-4
+        ">
           <div className="w-full bg-[#EBA043] px-4 py-3 flex items-center justify-between">
             <h3 className="font-black text-black text-[14px]">Support</h3>
             <button onClick={() => setOpen(false)} className="w-6 h-6 rounded-full bg-black text-[#EBA043] flex items-center justify-center text-xs font-bold">✕</button>
           </div>
 
-          <div className="bg-[#141414] p-4 flex flex-col gap-3">
+          <div className="bg-[#141414] p-4 flex flex-col gap-3 overflow-y-auto">
             <div className="bg-[#1A1C24] rounded-xl p-3 border border-gray-800">
               <p className="text-[11px] font-bold text-[#EBA043] mb-2">✈️ Telegram Support</p>
               <a href="https://t.me/Aliciia580" target="_blank" className="flex items-center gap-2 bg-[#229ED9] text-white px-3 py-2.5 rounded-lg font-bold text-[13px]">

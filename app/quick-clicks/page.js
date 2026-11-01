@@ -10,29 +10,24 @@ export default function QuickClicksPage() {
 
   useEffect(() => {
     try {
-      // Check ALL possible storage keys
       const raw = localStorage.getItem('riot_user') || 
                   localStorage.getItem('currentUser') || 
                   localStorage.getItem('user') || 
                   localStorage.getItem('booksforward_user') || '{}';
       const u = JSON.parse(raw);
-      
-      console.log("QuickClicks user:", u); // debug
 
-      // Your admin phones - all formats
-      const adminPhones = [
-        '0753520252', 
-        '+256753520252', 
-        '256753520252',
-        '+256753520252'.replace('+',''),
-        '753520252'
-      ];
-      
-      const phone = String(u.phone || u.userId || '').replace(/\s/g,'');
-      // also check last 9 digits
-      const last9 = phone.slice(-9);
-      
-      if (adminPhones.includes(phone) || last9 === '753520252' || u.isAdmin || u.role === 'admin') {
+      const normalize = (p='') => {
+        let s = String(p).replace(/\s/g,'')
+        if (s.startsWith('+256')) s = '0' + s.slice(4)
+        if (s.startsWith('256')) s = '0' + s.slice(3)
+        return s
+      }
+
+      const ADMIN = ['0753520252','+256753520252','256753520252'].map(normalize)
+      const phone = normalize(u.phone || u.phoneNumber || u.userId || '')
+      const last9 = phone.slice(-9)
+
+      if (ADMIN.includes(phone) || last9 === '753520252' || u.isAdmin || u.role === 'admin') {
         setIsAdmin(true);
       }
     } catch (e) {
