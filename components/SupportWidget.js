@@ -1,0 +1,110 @@
+"use client";
+import { useState, useRef, useEffect } from "react";
+
+export default function SupportWidget() {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [dragging, setDragging] = useState(false);
+  const startPos = useRef({ x: 0, y: 0 });
+  const hasMoved = useRef(false);
+
+  useEffect(() => {
+    // start position bottom right but above bottomnav
+    setPos({ x: window.innerWidth - 72, y: window.innerHeight - 180 });
+  }, []);
+
+  const onStart = (e) => {
+    setDragging(true);
+    hasMoved.current = false;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    startPos.current = { x: clientX - pos.x, y: clientY - pos.y };
+  };
+
+  const onMove = (e) => {
+    if (!dragging) return;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    const newX = clientX - startPos.current.x;
+    const newY = clientY - startPos.current.y;
+    hasMoved.current = true;
+    setPos({ x: newX, y: newY });
+  };
+
+  const onEnd = () => {
+    setDragging(false);
+    setTimeout(() => { hasMoved.current = false }, 100);
+  };
+
+  useEffect(() => {
+    if (dragging) {
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onEnd);
+      window.addEventListener('touchmove', onMove, { passive: false });
+      window.addEventListener('touchend', onEnd);
+    } else {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onEnd);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+    }
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onEnd);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+    };
+  }, [dragging, pos]);
+
+  const handleClick = () => {
+    if (hasMoved.current) return;
+    setOpen(!open);
+  };
+
+  return (
+    <>
+      {/* Draggable Button */}
+      <button
+        onMouseDown={onStart}
+        onTouchStart={onStart}
+        onClick={handleClick}
+        style={{ left: pos.x, top: pos.y }}
+        className={`fixed z-[40] w-[56px] h-[56px] rounded-full bg-[#EBA043] shadow-xl flex items-center justify-center text-[28px] border-2 border-black transition select-none ${dragging ? 'scale-110 cursor-grabbing' : 'cursor-grab'}`}
+      >
+        🎧
+      </button>
+
+      {/* Panel - fixed, not draggable */}
+      {open && (
+        <div className="fixed bottom-[20px] right-4 z-[41] w-[300px] rounded-[20px] overflow-hidden shadow-2xl border-2 border-[#EBA043] bg-black">
+          <div className="w-full bg-[#EBA043] px-4 py-3 flex items-center justify-between">
+            <h3 className="font-black text-black text-[14px]">Support</h3>
+            <button onClick={() => setOpen(false)} className="w-6 h-6 rounded-full bg-black text-[#EBA043] flex items-center justify-center text-xs font-bold">✕</button>
+          </div>
+
+          <div className="bg-[#141414] p-4 flex flex-col gap-3">
+            <div className="bg-[#1A1C24] rounded-xl p-3 border border-gray-800">
+              <p className="text-[11px] font-bold text-[#EBA043] mb-2">✈️ Telegram Support</p>
+              <a href="https://t.me/Aliciia580" target="_blank" className="flex items-center gap-2 bg-[#229ED9] text-white px-3 py-2.5 rounded-lg font-bold text-[13px]">
+                <span className="bg-white rounded-full w-6 h-6 flex items-center justify-center text-[#229ED9]">✈</span>
+                @Aliciia580
+              </a>
+            </div>
+
+            <div className="bg-[#1A1C24] rounded-xl p-3 border border-gray-800">
+              <p className="text-[11px] font-bold text-[#EBA043] mb-2">💬 WhatsApp Support</p>
+              <div className="flex flex-col gap-2">
+                <a href="https://wa.me/17747348569" target="_blank" className="flex items-center gap-2 bg-[#25D366] text-white px-3 py-2.5 rounded-lg font-bold text-[13px]">
+                  🟢 +1 774 734 8569
+                </a>
+                <a href="https://wa.me/17747300895" target="_blank" className="flex items-center gap-2 bg-[#25D366] text-white px-3 py-2.5 rounded-lg font-bold text-[13px]">
+                  🟢 +1 774 730 0895
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}

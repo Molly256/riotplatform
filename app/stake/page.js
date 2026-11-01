@@ -2,6 +2,19 @@
 import { useState, useEffect } from "react";
 import BottomNav from "@/components/BottomNav";
 
+const P = 'riot:'
+const getUgandaDate = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' }); // YYYY-MM-DD
+const getUgandaDateTime = () => new Date().toLocaleString('en-GB', { timeZone: 'Africa/Kampala', hour12: false }); // d/m/yr hr:mins
+const getUgandaDMY = () => {
+  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Kampala' }));
+  const day = d.getDate();
+  const month = d.getMonth()+1;
+  const year = d.getFullYear();
+  const hr = String(d.getHours()).padStart(2,'0');
+  const min = String(d.getMinutes()).padStart(2,'0');
+  return `${day}/${month}/${year} ${hr}:${min}`;
+};
+
 export default function StakingPage() {
   const [active, setActive] = useState("stake");
   const [tab, setTab] = useState("daily");
@@ -11,14 +24,18 @@ export default function StakingPage() {
   const [selectedIdx, setSelectedIdx] = useState(null);
   const [outOfStock, setOutOfStock] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState('');
+  const [balance, setBalance] = useState(0);
 
   useEffect(() => {
     const savedStock = JSON.parse(localStorage.getItem("outOfStock_daily") || "[]");
     setOutOfStock(savedStock);
-    if (!localStorage.getItem("availableBalance")) {
-      localStorage.setItem("availableBalance", "5000000");
-    }
+    const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('booksforward_user') || localStorage.getItem('user') || '{}');
+    const b = Number(u.availableBalance || u.balance || localStorage.getItem("availableBalance") || 0);
+    setBalance(b);
   }, []);
+
+  const showToast = (m) => { setToast(m); setTimeout(()=>setToast(''), 3000); }
 
   const stakeList = [
     { img: "/p1.jpg",  power: "1W",     stakePower: 20000,  daily: 1000,  total: 180000,  period: "180 Days" },
@@ -38,6 +55,13 @@ export default function StakingPage() {
 
   const handleStakeClick = (item, idx) => {
     if (outOfStock.includes(idx)) return;
+    // CHECK BALANCE BEFORE CONFIRM
+    const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('booksforward_user') || localStorage.getItem('user') || '{}');
+    const curBal = Number(u.availableBalance || u.balance || 0);
+    if (curBal < item.stakePower) {
+      showToast(`Insufficient Total Balance! Need ${item.stakePower.toLocaleString()} UGX`);
+      return;
+    }
     setSelectedItem(item);
     setSelectedIdx(idx);
     setShowConfirm(true);
@@ -48,57 +72,54 @@ export default function StakingPage() {
     setLoading(true);
     try {
       const amount = selectedItem.stakePower;
-      const storedUser = JSON.parse(localStorage.getItem("user") || "{}");
-      const userId = storedUser.userId || storedUser.id || localStorage.getItem("userId") || localStorage.getItem("rp_userId");
-      
-      if (!userId) {
-        alert("Please login again - userId not found");
-        setLoading(false);
-        setShowConfirm(false);
-        return;
-      }
+      const storedUser = JSON.parse(localStorage.getItem("riot_user") || localStorage.getItem('booksforward_user') || localStorage.getItem("user") || "{}");
+      const phone = storedUser.phone;
+      const userId = storedUser.userId || storedUser.id || storedUser.phone;
 
       const res = await fetch("/api/stake", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, power: amount, amount: amount, tab })
+        body: JSON.stringify({ userId, phone, power: amount, amount, tab })
       });
-
       const data = await res.json();
 
-      if (!data.success) {
-        alert(data.message || "Stake failed");
-        setLoading(false);
-        setShowConfirm(false);
-        return;
+      if (!res.ok || !data.success) {
+        if (data.error?.includes('Insufficient')) showToast('Insufficient Total Balance');
+        else showToast(data.message || data.error || "Stake failed");
+        setLoading(false); setShowConfirm(false); return;
       }
 
-      // Update local balances from Redis
-      if (data.user) {
-        localStorage.setItem("user", JSON.stringify(data.user));
-        localStorage.setItem("availableBalance", String(data.user.availableBalance));
-        localStorage.setItem("totalBalance", String(data.user.totalBalance || data.user.balance));
-        localStorage.setItem("balance", String(data.user.balance));
-      }
+      // === DEDUCT IMMEDIATELY FROM Mine Total balance field ===
+      const updatedUser = data.user;
+      // update all storage keys Mine page reads
+      localStorage.setItem("riot_user", JSON.stringify(updatedUser));
+      localStorage.setItem("booksforward_user", JSON.stringify(updatedUser));
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+      localStorage.setItem("availableBalance", String(updatedUser.availableBalance));
+      localStorage.setItem("totalBalance", String(updatedUser.balance || updatedUser.availableBalance));
+      localStorage.setItem("balance", String(updatedUser.balance || updatedUser.availableBalance));
+      setBalance(Number(updatedUser.availableBalance));
 
-      // Save My Stake locally for instant UI (also saved in Redis)
+      // === SAVE MY STAKE WITH TODAY ENABLED ===
       const myStakes = JSON.parse(localStorage.getItem("myStakes") || '{"daily":[],"weekend":[],"hourly":[]}');
-      myStakes[tab].push({ ...selectedItem, stakedAt: new Date().toISOString(), idx: selectedIdx, countdown: "0/180", collectedDays: 0 });
+      const ugDate = getUgandaDate(); // for yield reset check
+      const newStake = {
+        ...selectedItem,
+        stakedAt: new Date().toISOString(),
+        ugStakedDate: ugDate,
+        idx: selectedIdx,
+        collectedDays: 0,
+        lastClaimDate: '', // empty means today's yield button ENABLED immediately
+        countdown: "1/180",
+        canClaimToday: true
+      };
+      myStakes[tab].push(newStake);
       localStorage.setItem("myStakes", JSON.stringify(myStakes));
 
-      // Save transactions locally for instant UI
+      // === TX HISTORY WITH d/m/yr hr:mins ===
       const txs = JSON.parse(localStorage.getItem("transactions") || "[]");
-      const now = new Date();
-      const dateStr = `${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
-      txs.unshift({ 
-        type: "Stake", 
-        amount: amount, 
-        status: "success", 
-        date: dateStr, 
-        dateStr: dateStr,
-        tab: tab,
-        display: `Stake success ${amount.toLocaleString()} UGX`
-      });
+      const dmy = getUgandaDMY();
+      txs.unshift({ type: "Stake", amount, status: "success", date: dmy, dateStr: dmy, tab, display: `Stake success ${amount.toLocaleString()} UGX` });
       localStorage.setItem("transactions", JSON.stringify(txs));
 
       const newStock = [...outOfStock, selectedIdx];
@@ -110,18 +131,17 @@ export default function StakingPage() {
       setTimeout(() => setShowSuccess(false), 1800);
 
     } catch (e) {
-      console.error(e);
-      alert("Stake error: " + e.message);
+      showToast("Stake error: " + e.message);
       setShowConfirm(false);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   return (
     <div className="min-h-screen w-full bg-[#141414] flex flex-col pb-[110px]">
+      {toast && <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] bg-red-600 text-white px-4 py-2 rounded-full font-bold text-xs">{toast}</div>}
       <div className="w-full pt-8 pb-6">
         <h1 className="text-white text-[38px] font-extrabold text-center">Staking</h1>
+        <p className="text-center text-[#EBA043] text-[12px] font-bold mt-1">Total Balance: {balance.toLocaleString()} UGX</p>
       </div>
 
       <div className="w-full px-3 flex gap-2 mb-5">
@@ -149,7 +169,6 @@ export default function StakingPage() {
                       <div className="flex justify-between"><span className="text-white/60 text-[12px]">📅 Staking Period</span><span className="text-white font-semibold text-[12px]">{item.period}</span></div>
                       <div className="flex justify-between"><span className="text-white/60 text-[12px]">📈 Daily Yield</span><span className="text-white font-semibold text-[12px]">{item.daily.toLocaleString()} UGX</span></div>
                       <div className="flex justify-between"><span className="text-white/60 text-[12px]">✨ Total Yield</span><span className="text-white font-semibold text-[12px]">{item.total.toLocaleString()} UGX</span></div>
-                      <div className="flex justify-between"><span className="text-white/60 text-[12px]">🛡️ Stake Limit</span><span className="text-white font-semibold text-[12px]">1x</span></div>
                     </div>
                   </div>
                   <button onClick={() => handleStakeClick(item, idx)} disabled={isOut} className={`w-full mt-3 h-[36px] rounded-[10px] font-extrabold text-[13px] ${isOut ? "bg-[#3a3a3a] text-white/60" : "bg-[#EBA043] text-black"}`}>{isOut ? "Out of Stock" : "STAKE POWER"}</button>
@@ -160,16 +179,16 @@ export default function StakingPage() {
         </div>
       )}
 
-      {tab === "weekend" && (<div className="w-full flex-1 flex items-center justify-center mt-20"><h2 className="text-[#EBA043] text-[24px] font-extrabold tracking-wide">Coming soon......</h2></div>)}
-      {tab === "hourly" && (<div className="w-full flex-1 flex items-center justify-center mt-20"><h2 className="text-[#EBA043] text-[24px] font-extrabold tracking-wide">Coming soon......</h2></div>)}
+      {tab !== "daily" && (<div className="w-full flex-1 flex items-center justify-center mt-20"><h2 className="text-[#EBA043] text-[24px] font-extrabold">Coming soon......</h2></div>)}
 
       {showConfirm && (
         <div className="fixed inset-0 z-[1000] bg-black/70 flex items-center justify-center px-6">
           <div className="w-full max-w-[320px] bg-black border border-[#EBA043]/60 rounded-[18px] p-6 flex flex-col items-center">
-            <p className="text-[#EBA043] text-[16px] font-bold text-center">Do you want to stake this generator?</p>
+            <p className="text-[#EBA043] text-[16px] font-bold text-center">Stake {selectedItem?.stakePower.toLocaleString()} UGX?</p>
+            <p className="text-white/60 text-xs mt-2">Will deduct from Total Balance</p>
             <div className="flex gap-4 mt-6">
               <button onClick={confirmYes} disabled={loading} className="w-[90px] h-[38px] bg-[#EBA043] rounded-[10px] text-black font-extrabold text-[14px]">{loading ? "..." : "Yes"}</button>
-              <button onClick={() => setShowConfirm(false)} className="w-[90px] h-[38px] bg-[#EBA043] rounded-[10px] text-black font-extrabold text-[14px]">No</button>
+              <button onClick={() => setShowConfirm(false)} className="w-[90px] h-[38px] bg-white/20 rounded-[10px] text-white font-extrabold text-[14px]">No</button>
             </div>
           </div>
         </div>

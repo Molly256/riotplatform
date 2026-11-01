@@ -27,6 +27,7 @@ export default function RegisterPage() {
   const [locked, setLocked] = useState(false);
   const [lockUntil, setLockUntil] = useState(0);
   const [toast, setToast] = useState("");
+  const [toastType, setToastType] = useState("default"); // orange / default
   const [sending, setSending] = useState(false);
   const timerRef = useRef(null);
 
@@ -95,25 +96,27 @@ export default function RegisterPage() {
     return () => clearTimeout(timerRef.current);
   }, [timer, locked, lockUntil]);
 
+  const showToast = (msg, type="default") => {
+    setToast(msg);
+    setToastType(type);
+    setTimeout(()=>setToast(""),4000);
+  };
+
   const handleSignUp = async () => {
     if (!phone || phone.length < 7) {
-      setToast("Enter valid phone number");
-      setTimeout(()=>setToast(""),2000);
+      showToast("Enter valid phone number");
       return;
     }
     if (!username || !email || !password) {
-      setToast("Fill all fields");
-      setTimeout(()=>setToast(""),2000);
+      showToast("Fill all fields");
       return;
     }
     if (password !== confirmPassword) {
-      setToast("Passwords do not match");
-      setTimeout(()=>setToast(""),2000);
+      showToast("Passwords do not match");
       return;
     }
     if (!inviteCode || !/^\d{6}$/.test(inviteCode)) {
-      setToast("Invite code required - must be 6 digits");
-      setTimeout(()=>setToast(""),3000);
+      showToast("Invite code required - must be 6 digits");
       return;
     }
 
@@ -127,7 +130,18 @@ export default function RegisterPage() {
         body: JSON.stringify({ phone: fullPhone, username, email, password, inviterCode: inviteCode })
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Signup failed");
+      
+      if (!res.ok || !data.success) {
+        const msg = data.message || data.error || "Signup failed";
+        // === ORANGE TOAST FOR IP + VPN ===
+        if (data.error === 'IP_EXISTS' || data.error === 'VPN_DETECTED' || msg.toLowerCase().includes('same ip') || msg.toLowerCase().includes('vpn')) {
+          showToast(msg, "orange");
+        } else {
+          showToast(msg, "default");
+        }
+        setSending(false);
+        return;
+      }
 
       localStorage.setItem("currentUser", JSON.stringify(data.user));
       localStorage.setItem("user", JSON.stringify(data.user));
@@ -139,7 +153,6 @@ export default function RegisterPage() {
       localStorage.removeItem('referrer_code');
       localStorage.removeItem('referredBy');
 
-      // === FIX: CREATE REGISTRATION REWARD 1000 UGX FOR MINE + TX HISTORY ===
       const now = new Date();
       const ugDate = `${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
       const regTx = {
@@ -158,15 +171,11 @@ export default function RegisterPage() {
       localStorage.setItem("transactions", JSON.stringify(noDup));
       localStorage.setItem("totalBalance", "1000");
       localStorage.setItem("availableBalance", "1000");
-      // === END FIX ===
 
-      setToast("Sign up successful");
+      showToast("Sign up successful", "default");
       setTimeout(() => router.push("/login"), 1200);
     } catch (err) {
-      console.log(err);
-      let msg = err.message;
-      setToast(msg);
-      setTimeout(()=>setToast(""),3000);
+      showToast(err.message, "default");
     }
     setSending(false);
   };
@@ -237,7 +246,7 @@ export default function RegisterPage() {
       </div>
 
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-black border border-[#EBA043] text-white text-[13px] font-bold px-6 py-3 rounded-[12px] z-[9999]">
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 text-[13px] font-bold px-6 py-3 rounded-[12px] z-[9999] border shadow-xl ${toastType === 'orange' ? 'bg-[#EBA043] text-black border-black' : 'bg-black border-[#EBA043] text-white'}`}>
           {toast}
         </div>
       )}

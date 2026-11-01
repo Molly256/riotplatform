@@ -27,16 +27,14 @@ export default function MyStakePage() {
     "40.0MW": { stakePower: 5000000, daily: 40000 },
   };
 
-  // === UGANDA TIME HELPERS (EAT = UTC+3) ===
-  const getUgandaDate = (date = new Date()) => {
-    return new Date(date.toLocaleString("en-US", { timeZone: "Africa/Kampala" }));
-  };
+  const getUgDateObj = (date = new Date()) => new Date(date.toLocaleString("en-US", { timeZone: "Africa/Kampala" }));
   const getUgandaDateString = (date = new Date()) => {
-    const ug = getUgandaDate(date);
-    return `${ug.getFullYear()}-${ug.getMonth()+1}-${ug.getDate()}`; // e.g. 2026-5-13
+    const ug = getUgDateObj(date);
+    return `${ug.getFullYear()}-${ug.getMonth()+1}-${ug.getDate()}`;
   };
-  const isSameUgandaDay = (dateStr1, dateStr2) => {
-    return dateStr1 === dateStr2;
+  const getUgDMYHM = (date = new Date()) => {
+    const ug = getUgDateObj(date);
+    return `${ug.getDate()}/${ug.getMonth()+1}/${ug.getFullYear()} ${String(ug.getHours()).padStart(2,'0')}:${String(ug.getMinutes()).padStart(2,'0')}`;
   };
 
   useEffect(() => {
@@ -45,33 +43,32 @@ export default function MyStakePage() {
     Object.keys(fixed).forEach(tabKey => {
       fixed[tabKey] = fixed[tabKey].map(s => {
         const real = REAL_STAKE_LIST[s.power];
+        // FIX: if just staked, lastCollected should be undefined => enabled immediately
+        if (s.lastCollected === undefined) s.lastCollected = null;
         if (s.collectedDays >= 180) return { ...s, expired: true, countdown: "Expired", daily: real?.daily || s.daily };
         if (real) return { ...s, daily: real.daily, stakePower: real.stakePower, total: real.daily*180, expired: false };
         return s;
       });
     });
     setMyStakes(fixed);
-    if (JSON.stringify(fixed) !== JSON.stringify(saved)) localStorage.setItem("myStakes", JSON.stringify(fixed));
-
-    // Tick every minute to auto-unlock at midnight Uganda time
+    localStorage.setItem("myStakes", JSON.stringify(fixed));
     const interval = setInterval(() => setNowTick(Date.now()), 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [nowTick]);
 
   const powerFull = (short) => {
     if (!short) return "";
     if (short.includes("MW")) return short.replace("MW", " MegaWatt").replace(".0", "");
     if (short.includes("kW")) return short.replace("kW", " KiloWatt").replace(".0", "");
-    if (short.includes("W")) return short.replace("W", " Watt");
-    return short;
+    return short.replace("W", " Watt");
   };
 
-  // === CHECK IF COLLECTED TODAY IN UGANDA TIME ===
+  // === UGANDA RESET 00:00 ===
   const hasCollectedTodayUganda = (item) => {
-    if (!item.lastCollected) return false;
+    if (!item.lastCollected) return false; // null/'' => NOT collected today => button ENABLED immediately
     const lastUgandaDay = getUgandaDateString(new Date(item.lastCollected));
     const todayUgandaDay = getUgandaDateString(new Date());
-    return isSameUgandaDay(lastUgandaDay, todayUgandaDay);
+    return lastUgandaDay === todayUgandaDay;
   };
 
   const canCollect = (item) => {
@@ -89,12 +86,12 @@ export default function MyStakePage() {
     setShowCollect(true);
   };
 
-  const confirmCollect = () => {
+  const confirmCollect = async () => {
     const real = REAL_STAKE_LIST[collectItem.power];
     const amount = real.daily;
     const power = collectItem.power;
     const now = new Date();
-    const dateStr = `${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const dateStr = getUgDMYHM(now); // d/m/yr hr:mins Uganda
 
     const currentInState = myStakes[tab][collectIndex];
     if (hasCollectedTodayUganda(currentInState)) {
@@ -103,36 +100,53 @@ export default function MyStakePage() {
       return;
     }
 
+    // === ADD TO Mine Total Balance immediately ===
+    const userRaw = JSON.parse(localStorage.getItem("riot_user") || localStorage.getItem("rp_user") || localStorage.getItem("user") || "{}");
+    const phone = userRaw.phone || userRaw.userId;
+    try {
+      const res = await fetch("/api/claim-yield", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: phone, amount, power })
+      });
+      const data = await res.json();
+      if (data.user) {
+        localStorage.setItem("riot_user", JSON.stringify(data.user));
+        localStorage.setItem("user", JSON.stringify(data.user));
+        localStorage.setItem("availableBalance", String(data.user.availableBalance));
+        localStorage.setItem("totalBalance", String(data.user.balance || data.user.totalBalance));
+        localStorage.setItem("balance", String(data.user.balance));
+      }
+    } catch {}
+
+    // Local fallback
     localStorage.setItem("todaysYield", (parseInt(localStorage.getItem("todaysYield")||"0")+amount).toString());
     localStorage.setItem("totalStakeYield", (parseInt(localStorage.getItem("totalStakeYield")||"0")+amount).toString());
-    localStorage.setItem("totalBalance", (parseInt(localStorage.getItem("totalBalance")||"0")+amount).toString());
-    localStorage.setItem("availableBalance", (parseInt(localStorage.getItem("availableBalance")||"0")+amount).toString());
+    const curTotal = parseInt(localStorage.getItem("totalBalance")||"0");
+    localStorage.setItem("totalBalance", String(curTotal+amount));
+    localStorage.setItem("availableBalance", String(curTotal+amount));
 
     const txs = JSON.parse(localStorage.getItem("transactions") || "[]");
     txs.unshift({ 
       type: "Stake Yield", power, stakePower: real.stakePower, amount,
-      status: "success", date: dateStr, dateObj: now.toISOString(),
+      status: "success", date: dateStr, dateStr: dateStr, dateObj: now.toISOString(),
       ugandaDate: getUgandaDateString(now),
+      display: `Yield ${power} +${amount.toLocaleString()} UGX`,
       collectedDays: (currentInState.collectedDays||0)+1
     });
     localStorage.setItem("transactions", JSON.stringify(txs));
 
     const updated = { ...myStakes };
     const item = updated[tab][collectIndex];
-    item.collectedDays += 1;
-
+    item.collectedDays = (item.collectedDays||0) + 1;
     if (item.collectedDays >= 180) {
       item.expired = true;
       item.countdown = "Expired";
       item.expiredAt = now.toISOString();
-      const txs2 = JSON.parse(localStorage.getItem("transactions") || "[]");
-      txs2.unshift({ type: "Stake Expired", power, status: "expired", date: dateStr, dateObj: now.toISOString(), message: `${power} expired - Total ${(real.daily*180).toLocaleString()} UGX` });
-      localStorage.setItem("transactions", JSON.stringify(txs2));
     } else {
       item.countdown = `${item.collectedDays}/180`;
       item.lastCollected = now.toISOString();
       item.lastCollectedUgandaDate = getUgandaDateString(now);
-      item.expired = false;
     }
     item.daily = real.daily;
     item.stakePower = real.stakePower;
@@ -140,10 +154,6 @@ export default function MyStakePage() {
     setMyStakes(updated);
     localStorage.setItem("myStakes", JSON.stringify(updated));
     setShowCollect(false);
-    
-    if (item.collectedDays >= 180) {
-      alert(`🎉 ${power} completed 180 days! Expired.`);
-    }
   };
 
   const currentList = myStakes[tab] || [];
@@ -152,7 +162,7 @@ export default function MyStakePage() {
     <div className="min-h-screen w-full bg-[#141414] flex flex-col pb-[110px]">
       <div className="w-full bg-[#EBA043] pt-8 pb-6">
         <h1 className="text-black text-[26px] font-extrabold text-center">My stake</h1>
-        <p className="text-black/60 text-[11px] text-center mt-1">Uganda Time: {getUgandaDate().toLocaleString("en-UG", { timeZone: "Africa/Kampala" })}</p>
+        <p className="text-black/60 text-[11px] text-center mt-1">Resets 00:00 Uganda - {getUgDateObj().toLocaleString("en-UG", { timeZone: "Africa/Kampala" })}</p>
       </div>
 
       <div className="w-full px-3 flex gap-2 my-5">
@@ -177,19 +187,16 @@ export default function MyStakePage() {
                     <img src={item.img} alt="" className="w-full h-full object-cover" />
                     <div className="absolute top-[6px] left-[6px] bg-black/80 border border-[#EBA043]/60 text-[#EBA043] text-[11px] font-extrabold px-2 py-1 rounded-[8px]">{item.power}</div>
                     {isExpired && <div className="absolute inset-0 bg-black/70 flex items-center justify-center"><span className="bg-red-600 text-white font-black text-[12px] px-3 py-1 rounded-full">EXPIRED</span></div>}
-                    {collectedToday && !isExpired && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><span className="bg-white/20 text-white font-bold text-[10px] px-2 py-1 rounded-full">DONE TODAY</span></div>}
                   </div>
-                  <button onClick={() => handleReceiveClick(item, idx)} disabled={!isReady} className={`w-full h-[36px] rounded-[10px] font-extrabold text-[11px] ${isExpired ? "bg-red-900/50 text-white/40" : collectedToday ? "bg-[#3a3a3a] text-white/60" : "bg-[#EBA043] text-black"}`}>
-                    {isExpired ? "Expired" : collectedToday ? "All done for today" : "Receive stake yield"}
+                  <button onClick={() => handleReceiveClick(item, idx)} disabled={!isReady} className={`w-full h-[36px] rounded-[10px] font-extrabold text-[11px] ${isExpired ? "bg-red-900/50 text-white/40" : collectedToday ? "bg-[#3a3a3a] text-white/60" : "bg-[#EBA043] text-black animate-pulse"}`}>
+                    {isExpired ? "Expired" : collectedToday ? "All done for today" : "Receive Today's Yield"}
                   </button>
                 </div>
                 <div className="flex-1 flex flex-col justify-start pt-1">
                   <div className="flex flex-col gap-[10px]">
-                    <div className="flex justify-between items-center"><span className="text-[12px]">💰</span><span className="text-white/60 text-[11px]">Stake power</span><span className="text-white font-bold text-[11px]">{real.stakePower.toLocaleString()} UGX</span></div>
-                    <div className="flex justify-between items-center"><span className="text-[12px]">📅</span><span className="text-white/60 text-[11px]">Stake validity</span><span className="text-white font-bold text-[11px]">180 days</span></div>
-                    <div className="flex justify-between items-center"><span className="text-[12px]">⚡</span><span className="text-white/60 text-[11px]">Power output</span><span className="text-white font-bold text-[11px]">{powerFull(item.power)}</span></div>
-                    <div className="flex justify-between items-center"><span className="text-[12px]">📈</span><span className="text-white/60 text-[11px]">Stake yield</span><span className="text-white font-bold text-[11px]">{real.daily.toLocaleString()} UGX</span></div>
-                    <div className="flex justify-between items-center border-t border-white/10 pt-2 mt-1"><span className="text-[12px]">⏳</span><span className="text-white/60 text-[11px]">{isExpired ? "Status" : "Countdown"}</span><span className={`font-extrabold text-[11px] ${isExpired ? "text-red-400" : collectedToday ? "text-white/40" : "text-[#EBA043]"}`}>{isExpired ? "Expired" : collectedToday ? "All done - Resets 00:00" : item.countdown || "0/180"}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-white/60 text-[11px]">Stake power</span><span className="text-white font-bold text-[11px]">{real.stakePower.toLocaleString()} UGX</span></div>
+                    <div className="flex justify-between items-center"><span className="text-white/60 text-[11px]">Stake yield</span><span className="text-white font-bold text-[11px]">{real.daily.toLocaleString()} UGX</span></div>
+                    <div className="flex justify-between items-center border-t border-white/10 pt-2 mt-1"><span className="text-white/60 text-[11px]">{isExpired ? "Status" : "Countdown"}</span><span className={`font-extrabold text-[11px] ${isExpired ? "text-red-400" : collectedToday ? "text-white/40" : "text-[#EBA043]"}`}>{isExpired ? "Expired" : collectedToday ? "Resets 00:00 Uganda" : item.countdown || "0/180"}</span></div>
                   </div>
                 </div>
               </div>
@@ -203,7 +210,7 @@ export default function MyStakePage() {
           <div className="w-full max-w-[320px] bg-black border border-[#EBA043]/60 rounded-[18px] p-6 flex flex-col items-center">
             <p className="text-[#EBA043] text-[14px] font-bold text-center">Tap to collect stake yield of</p>
             <p className="text-[#EBA043] text-[20px] font-extrabold mt-2">💎 {REAL_STAKE_LIST[collectItem.power]?.daily.toLocaleString()} UGX</p>
-            <p className="text-white/40 text-[11px] mt-1">Uganda Date: {getUgandaDateString()} - Day {(myStakes[tab][collectIndex]?.collectedDays||0)+1}/180</p>
+            <p className="text-white/40 text-[11px] mt-1">{getUgandaDateString()} - Day {(myStakes[tab][collectIndex]?.collectedDays||0)+1}/180</p>
             <div className="flex gap-4 mt-6 w-full">
               <button onClick={confirmCollect} className="flex-1 h-[42px] bg-[#EBA043] rounded-[10px] text-black font-extrabold text-[13px]">Collect</button>
               <button onClick={() => setShowCollect(false)} className="flex-1 h-[42px] bg-white/10 border border-[#EBA043]/40 rounded-[10px] text-white font-bold text-[13px]">Cancel</button>

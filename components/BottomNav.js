@@ -9,8 +9,8 @@ export default function BottomNav({ active, setActive, fixed = true }) {
     { id: "home", label: "Home", emoji: "🏠", link: "/dashboard" },
     { id: "quick", label: "Quick clicks", emoji: "⚡", link: "/quick-clicks" },
     { id: "stake", label: "Stake", emoji: "💎", link: "/stake" },
-    { id: "mine", label: "Mine", emoji: "🙋‍♀️", link: "/mine" },
     { id: "salary", label: "Salary", emoji: "💰", link: "/salary" },
+    { id: "mine", label: "Mine", emoji: "🙋‍♀️", link: "/mine" },
     // add these so your pages work (hidden from bottom bar)
     { id: "team", label: "Team", emoji: "👥", link: "/myteam" },
     { id: "history", label: "History", emoji: "📜", link: "/transactions" },

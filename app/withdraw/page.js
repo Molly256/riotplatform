@@ -1,0 +1,64 @@
+'use client'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+
+export default function Withdraw() {
+  const [balance, setBalance] = useState('0.00')
+  const [selected, setSelected] = useState('mtn')
+  const router = useRouter()
+
+  useEffect(()=>{
+    setBalance(localStorage.getItem('riot_balance') || '0.00')
+  },[])
+
+  return (
+    <main className="min-h-screen bg-black text-white">
+      <div className="w-full bg-[#EBA043] px-5 py-[14px] flex items-center gap-3 sticky top-0 z-50">
+        <Link href="/dashboard" className="text-black text-[22px] font-black no-underline">←</Link>
+        <h1 className="text-black font-black text-[18px] m-0">WITHDRAW</h1>
+      </div>
+
+      <div className="p-4 max-w-[480px] mx-auto">
+        {/* Orange gold box */}
+        <div className="bg-[#EBA043] rounded-[16px] p-5">
+          <p className="text-black font-bold text-[14px]">Total balance</p>
+          <p className="text-black font-black text-[32px] mt-1">{balance} UGX</p>
+        </div>
+
+        <p className="text-white font-black text-[16px] mt-6 mb-3">Payment method</p>
+
+        <div className="flex flex-col gap-3">
+          <div onClick={()=>setSelected('mtn')} className={`bg-[#12131A] rounded-[14px] p-4 flex items-center justify-between border cursor-pointer ${selected==='mtn'?'border-[#EBA043]':'border-[#2A2C35]'}`}>
+            <div className="flex items-center gap-3">
+              <img src="/mtn.png" className="w-[56px] h-[56px] rounded-[12px] bg-white object-cover" />
+              <div><p className="font-black">MTN Mobile Money</p><p className="text-[#9A8B7A] text-[12px] font-bold">Mobile Money • Uganda</p></div>
+            </div>
+            {selected==='mtn' && <div className="w-7 h-7 bg-[#EBA043] rounded-full flex items-center justify-center text-black font-black">✓</div>}
+          </div>
+
+          <div onClick={()=>setSelected('airtel')} className={`bg-[#12131A] rounded-[14px] p-4 flex items-center justify-between border cursor-pointer ${selected==='airtel'?'border-[#EBA043]':'border-[#2A2C35]'}`}>
+            <div className="flex items-center gap-3">
+              <img src="/airtel.png" className="w-[56px] h-[56px] rounded-[12px] bg-white object-cover" />
+              <div><p className="font-black">Airtel Money Uganda</p><p className="text-[#9A8B7A] text-[12px] font-bold">Mobile Money • Uganda</p></div>
+            </div>
+            {selected==='airtel' && <div className="w-7 h-7 bg-[#EBA043] rounded-full flex items-center justify-center text-black font-black">✓</div>}
+          </div>
+        </div>
+
+        <button onClick={()=>router.push(`/withdraw/${selected}`)} className="w-full mt-8 py-4 bg-[#EBA043] text-black font-black rounded-[12px]">Continue</button>
+
+        {/* Withdraw rules */}
+        <div className="mt-8">
+          <p className="text-[#EBA043] font-black text-[15px] mb-2">Withdraw rules</p>
+          <div className="text-[#8A8D98] text-[13px] font-bold leading-6">
+            <p>Withdraw Days: Monday to Saturday.</p>
+            <p>Withdraw Time: 9:00am to 6:00pm</p>
+            <p>Withdraw fee: 10%</p>
+            <p>Minimum withdraw amount: 2,000 UGX</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  )
+}

@@ -18,12 +18,10 @@ export default function RefRedirect() {
       } else {
         router.replace(`/register`);
       }
+    } else {
+      router.replace(`/register`);
     }
   }, [code, router]);
 
-  return (
-    <div className="min-h-screen bg-[#141414] flex items-center justify-center">
-      <p className="text-white text-[14px] font-bold">Redirecting...</p>
-    </div>
-  );
+  return null;
 }
