@@ -31,18 +31,46 @@ export default function MinePage() {
     const savedLang = localStorage.getItem("app_language") || localStorage.getItem("app_lang") || "en";
     setCurrentLang(savedLang);
 
-    const saved = JSON.parse(localStorage.getItem("currentUser") || localStorage.getItem("user") || "null");
+    const saved = JSON.parse(localStorage.getItem("currentUser") || localStorage.getItem("user") || localStorage.getItem("riot_user") || "null");
     setUser(saved);
     const av = localStorage.getItem("riot_avatar");
     if (av) setAvatar(av);
+
+    // LOCAL CALC - keep your logic for other fields
     let txs = JSON.parse(localStorage.getItem("transactions") || "[]");
     let cleanTxs = []; let hasReg = false;
     for(const tx of txs){ const ty=(tx.type||"").toLowerCase(); const isReg=ty.includes("regist")||ty.includes("bonus")||ty.includes("reward")||ty.includes("welcome")||ty.includes("signup"); if(isReg){ if(!hasReg){hasReg=true; cleanTxs.push(tx);} } else cleanTxs.push(tx);} if(cleanTxs.length!==txs.length){ txs=cleanTxs; localStorage.setItem("transactions", JSON.stringify(txs));}
     const todayStr=new Date().toLocaleDateString(); let totalPowerDeposited=0,totalWithdraw=0,todaysYield=0,totalStake=0,totalTeamCommission=0,totalStakeYield=0,totalTurbochargeUGX=0,totalRegistrationReward=0;
-    txs.forEach(tx=>{ const amount=parseFloat(tx.amount||0)||0; const type=(tx.type||"").toLowerCase(); const date=tx.date||""; if(type.includes("regist")||type.includes("bonus")||type.includes("reward")||type.includes("signup")||type.includes("welcome")) totalRegistrationReward+=amount||1000; if(type.includes("deposit")||type.includes("power deposited")||type.includes("recharge")) totalPowerDeposited+=amount; if(type.includes("withdraw")) totalWithdraw+=amount; if(type.includes("team")&&type.includes("commission")) totalTeamCommission+=amount; if(type.includes("stake yield")||type.includes("daily yield")){ totalStakeYield+=amount; if(date.includes(todayStr)||(tx.dateObj&&new Date(tx.dateObj).toLocaleDateString()===todayStr)) todaysYield+=amount; } if(date.startsWith(todayStr)&&type.includes("yield")) todaysYield+=amount; if(type.includes("stake")&&!type.includes("yield")) totalStake+=amount; if(type.includes("turbocharge exchange")) totalTurbochargeUGX+=amount; });
+    txs.forEach(tx=>{ const amount=parseFloat(tx.amount||0)||0; const type=(tx.type||"").toLowerCase(); const date=tx.date||""; if(type.includes("regist")||type.includes("bonus")||type.includes("reward")||type.includes("signup")||type.includes("welcome")) totalRegistrationReward+=amount||1000; if(type.includes("deposit")||type.includes("power deposited")||type.includes("recharge")||type.includes("system increase")) totalPowerDeposited+=amount; if(type.includes("withdraw")) totalWithdraw+=amount; if(type.includes("team")&&type.includes("commission")) totalTeamCommission+=amount; if(type.includes("stake yield")||type.includes("daily yield")){ totalStakeYield+=amount; if(date.includes(todayStr)||(tx.dateObj&&new Date(tx.dateObj).toLocaleDateString()===todayStr)) todaysYield+=amount; } if(date.startsWith(todayStr)&&type.includes("yield")) todaysYield+=amount; if(type.includes("stake")&&!type.includes("yield")) totalStake+=amount; if(type.includes("turbocharge exchange")) totalTurbochargeUGX+=amount; });
     const totalBalanceLS=parseFloat(localStorage.getItem("totalBalance")||"0"); const calculatedTotal=totalPowerDeposited+totalTeamCommission+totalStakeYield+totalTurbochargeUGX+totalRegistrationReward; let totalBalance=calculatedTotal>0?calculatedTotal:totalBalanceLS; if(totalRegistrationReward>0&&totalBalance<1000) totalBalance=1000; if(totalRegistrationReward===0&&totalBalanceLS===0) totalBalance=0;
     const totalChargePower=parseFloat(localStorage.getItem("totalChargePower")||"0"); const turboHistory=JSON.parse(localStorage.getItem("turboHistory")||"[]"); const totalTurboWattsEarned=turboHistory.length>0?turboHistory.length*0.25:totalChargePower+(totalTurbochargeUGX/1000);
     setBalances({ totalBalance, totalPowerDeposited, totalWithdraw, todaysYield, totalStake, totalTeamCommission, totalStakeYield, totalTurbochargeWatts: totalChargePower, totalTurbochargeUGX, totalTurboWattsEarned });
+
+    // ** REAL BALANCE FROM UPSTASH rp:user:{userId}.totalBalance - THIS FIXES SYSTEM INCREASE NOT SHOWING **
+    const q = saved?.phone || saved?.userId || saved?.id || localStorage.getItem("userId") || "";
+    if(q){
+      fetch(`/api/admin?action=users&q=${encodeURIComponent(q)}`)
+        .then(r=>r.json())
+        .then(d=>{
+          if(d.success && d.users && d.users[0]){
+            const fresh = d.users[0]
+            const realBal = Number(fresh.totalBalance ?? fresh.balance ?? 0)
+            if(realBal>0){
+              setBalances(prev=>({ ...prev, totalBalance: realBal }))
+              localStorage.setItem("totalBalance", String(realBal))
+              // update riot_user cache
+              const ru = JSON.parse(localStorage.getItem("riot_user")||"{}")
+              localStorage.setItem("riot_user", JSON.stringify({...ru, ...saved, totalBalance: realBal, balance: realBal}))
+              localStorage.setItem("currentUser", JSON.stringify({...saved, totalBalance: realBal, balance: realBal}))
+              localStorage.setItem("user", JSON.stringify({...saved, totalBalance: realBal, balance: realBal}))
+            }
+          }
+        })
+        .catch(()=>{})
+      
+      // Also try /api/auth/me if you have it - fallback for tx sync
+      fetch(`/api/transactions?userId=${encodeURIComponent(q)}`).then(()=>{}).catch(()=>{})
+    }
   }, []);
 
   const onAvatar = (e)=>{ const file=e.target.files[0]; if(!file) return; const rd=new FileReader(); rd.onload=()=>{ setAvatar(rd.result); localStorage.setItem("riot_avatar", rd.result); }; rd.readAsDataURL(file); };
@@ -77,7 +105,6 @@ export default function MinePage() {
     localStorage.setItem("app_lang", code);
     setCurrentLang(code);
     setShowLangs(false);
-    
     if(code === "en"){
       document.cookie = 'googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;';
       document.cookie = `googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=.${window.location.hostname};`;
