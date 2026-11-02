@@ -94,13 +94,20 @@ export async function POST(req){
         user.totalBalance = Number(user.totalBalance||0) + Number(txObj.amount)
         user.balance = user.totalBalance; user.availableBalance = user.totalBalance
         await redis.set(`${P}user:${user.userId}`, user)
-        try{ await redis.hincrbyfloat(`riot:user:${user.userId}`, 'balance', Number(txObj.amount)); await redis.hincrbyfloat(`riot:user:${user.userId}`, 'availableBalance', Number(txObj.amount)) }catch{}
+        try{
+          await redis.hset(`riot:user:${user.userId}`, { balance: user.totalBalance, totalBalance: user.totalBalance, availableBalance: user.totalBalance })
+          await redis.set(`riot:user:${user.userId}:balance`, user.totalBalance)
+          await redis.set(`riot:user:${user.userId}:totalBalance`, user.totalBalance)
+        }catch{}
       }
       if(finalStatus==='failed' && txType==='withdraw'){
         const refund = Number(txObj.originalAmount||txObj.amount)
         user.totalBalance = Number(user.totalBalance||0) + refund
         user.balance = user.totalBalance; user.availableBalance = user.totalBalance
         await redis.set(`${P}user:${user.userId}`, user)
+        try{
+          await redis.hset(`riot:user:${user.userId}`, { balance: user.totalBalance, totalBalance: user.totalBalance })
+        }catch{}
       }
 
       txObj.status = finalStatus; txObj.updatedAt = getUgDateTime(); txObj.display = finalStatus==='success' ? `${txType} success ${txObj.amount}` : `${txType} failed`
@@ -123,11 +130,37 @@ export async function POST(req){
       if(!query || !amount) return NextResponse.json({ success:false, error:'Missing' },{status:400})
       const u = await getUserByQuery(query); if(!u) return NextResponse.json({ success:false, error:'User not found' },{status:404})
       const amt = Number(String(amount).replace(/,/g,'')); if(isNaN(amt)||amt<=0) return NextResponse.json({ success:false, error:'Invalid' },{status:400})
-      u.totalBalance = Number(u.totalBalance||0) + amt; u.balance = u.totalBalance; u.availableBalance = u.totalBalance
+      
+      u.totalBalance = Number(u.totalBalance||0) + amt; 
+      u.balance = u.totalBalance; 
+      u.availableBalance = u.totalBalance
       await redis.set(`${P}user:${u.userId}`, u)
-      try{ await redis.hincrbyfloat(`riot:user:${u.userId}`, 'balance', amt) }catch{}
-      const nowStr = getUgDateTime(); const dateOnly = getUgDate()
-      const tx = { id: `sys_${Date.now()}_${u.userId}`, type: 'deposit', label: 'System increase', header: 'System increase', title: 'System increase', amount: amt, display: `System increase ${amt.toLocaleString()}`, status: 'success', dateStr: nowStr, date: nowStr, createdAt: nowStr, timestamp: Date.now(), phone: u.phone, userId: u.userId, username: u.username }
+
+      try{
+        await redis.hset(`riot:user:${u.userId}`, { balance: u.totalBalance, totalBalance: u.totalBalance, availableBalance: u.totalBalance })
+        await redis.set(`riot:user:${u.userId}:balance`, u.totalBalance)
+        await redis.set(`riot:user:${u.userId}:totalBalance`, u.totalBalance)
+      }catch{}
+
+      const nowStr = getUgDateTime(); 
+      const dateOnly = getUgDate()
+      const tx = { 
+        id: `sys_${Date.now()}_${u.userId}`, 
+        type: 'deposit', 
+        label: 'System increase', 
+        header: 'System increase', 
+        title: 'System increase', 
+        amount: amt, 
+        display: `System increase ${amt.toLocaleString()}`, 
+        status: 'success', 
+        dateStr: nowStr, 
+        date: nowStr, 
+        createdAt: nowStr, 
+        timestamp: Date.now(), 
+        phone: u.phone, 
+        userId: u.userId, 
+        username: u.username 
+      }
       const txStr = JSON.stringify(tx)
       await redis.lpush(`${P}tx:${u.userId}`, txStr)
       await redis.lpush(`${P}transactions:${u.userId}`, txStr)
