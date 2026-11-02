@@ -42,7 +42,7 @@ const getUgDMYHM = () => {
   return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 };
 
-async function processStakeCommissions(buyerId, stakeAmount) {
+async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {
   const rates = [0.10, 0.02, 0.01];
   const timeStr = getUgDMYHM();
 
@@ -74,7 +74,6 @@ async function processStakeCommissions(buyerId, stakeAmount) {
       uplineUser.balance = Number(uplineUser.balance || 0) + reward;
       uplineUser.availableBalance = Number(uplineUser.availableBalance || 0) + reward;
       uplineUser.totalBalance = Number(uplineUser.totalBalance || uplineUser.balance || 0);
-      // keep totalBalance in sync
       if(Number(uplineUser.totalBalance) < Number(uplineUser.balance)) uplineUser.totalBalance = uplineUser.balance
       await redis.set(P + 'user:' + uplineId, uplineUser);
       try{ await redis.hset(`riot:user:${uplineId}`, { balance: uplineUser.totalBalance, totalBalance: uplineUser.totalBalance, availableBalance: uplineUser.totalBalance }) }catch{}
@@ -95,29 +94,43 @@ async function processStakeCommissions(buyerId, stakeAmount) {
     await redis.lpush(P + 'tx:' + uplineId, JSON.stringify(commTx));
     await redis.lpush(P + 'tx:history:' + uplineId, JSON.stringify(commTx));
 
+    // FIX: Only Team A gets 2W first stake bonus + correct history
     if (i === 0) {
-      const turboKey = P + 'turbocharge:' + uplineId;
-      let turbo = await redis.get(turboKey);
-      if (!turbo) turbo = { totalPower: 0, members: 0 };
-      turbo = typeof turbo==='string'? parse(turbo):turbo
-      turbo.totalPower = Number(turbo.totalPower || 0) + 2;
-      turbo.lastUpdate = Date.now();
-      await redis.set(turboKey, turbo);
+      const upline = await redis.get(P + 'user:' + uplineId);
+      const uplineObj = typeof upline==='string'? parse(upline):upline;
+      if(uplineObj){
+        // Available goes up, Lifetime adds new to old for Mine page
+        const curAvail = Number(uplineObj.totalChargePower || uplineObj.turboAvailable || 0);
+        const curLife = Number(uplineObj.turboLifetime || uplineObj.totalTurboWatts || 0);
+        uplineObj.totalChargePower = Number((curAvail + 2).toFixed(2));
+        uplineObj.turboAvailable = uplineObj.totalChargePower;
+        uplineObj.turboLifetime = Number((curLife + 2).toFixed(2));
+        uplineObj.totalTurboWatts = uplineObj.turboLifetime;
+        await redis.set(P + 'user:' + uplineId, uplineObj);
+        
+        // update turbocharge key with both available and lifetime
+        await redis.set(P + 'turbocharge:' + uplineId, { 
+          totalPower: uplineObj.totalChargePower, 
+          lifetime: uplineObj.turboLifetime,
+          lastUpdate: Date.now() 
+        });
+      }
 
-      const turboTx = {
-        id: `turbo_stake_${Date.now()}_${uplineId}`,
-        type: 'turbocharge',
-        label: 'Turbocharge 2 watts',
-        amount: 2,
+      // FIX: push to earn_history so Recent Turbocharge shows 2W
+      const turboEarn = {
+        id: `turbo_earn_${Date.now()}_${uplineId}`,
+        type: 'first_stake',
+        watts: 2,
+        from: buyerPhone || buyerId,
         power: 2,
-        note: `2 watts from ${buyerId} stake (Team A)`,
-        status: 'success',
-        timestamp: Date.now(),
+        date: timeStr,
         dateStr: timeStr,
-        date: timeStr
+        timestamp: Date.now(),
+        display: `🔥 Received 2W - First Stake Bonus from ${buyerPhone||buyerId}`
       };
-      await redis.lpush(P + 'tx:' + uplineId + ':history', JSON.stringify(turboTx));
-      await redis.lpush(P + 'turbo:' + uplineId + ':history', JSON.stringify(turboTx));
+      await redis.lpush(P + 'turbo:' + uplineId + ':earn_history', JSON.stringify(turboEarn));
+      // keep old key for compatibility
+      await redis.lpush(P + 'turbo:' + uplineId + ':history', JSON.stringify(turboEarn));
     }
   }
 }
@@ -141,11 +154,9 @@ export async function POST(req) {
       return NextResponse.json({ success: false, error: 'Insufficient Total Balance', message: 'Insufficient Total Balance' }, { status: 400 });
     }
 
-    // DEDUCT - backend only
     user.balance = Number(user.balance || 0) - stakeAmount;
     user.availableBalance = Number(user.availableBalance || 0) - stakeAmount;
     user.totalBalance = Number(user.totalBalance || 0) - stakeAmount;
-    // ensure all fields equal after deduct
     if(user.totalBalance <0) user.totalBalance=0
     user.balance = user.totalBalance
     user.availableBalance = user.totalBalance
@@ -204,7 +215,7 @@ export async function POST(req) {
 
     if (!alreadyStaked) {
       await redis.set(firstKey, Date.now());
-      await processStakeCommissions(buyerId, stakeAmount);
+      await processStakeCommissions(buyerId, stakeAmount, user.phone);
     }
 
     return NextResponse.json({ success: true, stake: stakeData, user, firstTime: !alreadyStaked });
