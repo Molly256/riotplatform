@@ -16,10 +16,16 @@ export default function DepositMethod() {
   const [loading, setLoading] = useState(false)
 
   const isMTN = method === 'mtn'
-  const data = {
-    title: isMTN ? 'MTN Mobile Money' : 'Airtel Money Uganda',
-    name: 'kyazze Saha',
-    wallet: isMTN ? '0753185973' : '0701234567'
+  const data = isMTN ? {
+    title: 'MTN Mobile Money',
+    name: 'MALUKWAGO ALICE NORAH',
+    wallet: '0789748247',
+    network: 'MTN'
+  } : {
+    title: 'Airtel Money Uganda',
+    name: 'NABADDA FARIDAH',
+    wallet: '0732649967',
+    network: 'AIRTEL'
   }
 
   function copyText(t){
@@ -58,7 +64,6 @@ export default function DepositMethod() {
         return
       }
 
-      // also keep local for UI instant
       const txs = JSON.parse(localStorage.getItem('riot_transactions') || '[]')
       txs.unshift(j.tx)
       localStorage.setItem('riot_transactions', JSON.stringify(txs))
@@ -84,9 +89,13 @@ export default function DepositMethod() {
             <span className="text-[#8A8D98] font-bold text-[14px]">Names:</span>
             <div className="flex items-center gap-2"><span className="font-black text-[14px]">{data.name}</span><button onClick={()=>copyText(data.name)} className="bg-[#23252F] p-1.5 rounded">📋</button></div>
           </div>
-          <div className="flex justify-between items-center py-3">
+          <div className="flex justify-between items-center py-3 border-b border-[#23252F]">
             <span className="text-[#8A8D98] font-bold text-[14px]">Wallet:</span>
             <div className="flex items-center gap-2"><span className="font-black text-[14px]">{data.wallet}</span><button onClick={()=>copyText(data.wallet)} className="bg-[#23252F] p-1.5 rounded">📋</button></div>
+          </div>
+          <div className="flex justify-between items-center py-3">
+            <span className="text-[#8A8D98] font-bold text-[14px]">Network:</span>
+            <span className="font-black text-[14px]">{data.network}</span>
           </div>
         </div>
         <div className="mt-6 space-y-4">
