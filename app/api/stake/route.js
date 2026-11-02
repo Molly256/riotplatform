@@ -6,6 +6,36 @@ import { Redis } from '@upstash/redis';
 const redis = Redis.fromEnv();
 const P = 'rp:';
 
+const parse = s => { if(typeof s==='object') return s; try{return JSON.parse(s)}catch{return null} }
+const normalizePhone = p => { if(!p) return ''; let s=String(p).replace(/\s/g,''); if(s.startsWith('+256')) s='0'+s.slice(4); if(s.startsWith('256')) s='0'+s.slice(3); return s }
+
+async function getUserByQuery(q){
+  if(!q) return null
+  const raw = String(q).trim()
+  const low = raw.toLowerCase()
+  let userId = await redis.get(`${P}phone:${raw}`)
+  if(!userId) userId = await redis.get(`${P}phone:${normalizePhone(raw)}`)
+  if(!userId) userId = await redis.get(`${P}username:${low}`)
+  if(!userId){
+    const exists = await redis.exists(`${P}user:${raw}`)
+    if(exists) userId = raw
+  }
+  if(!userId){
+    const all = await redis.smembers(`${P}all_users`)
+    for(const id of all.slice(0,500)){
+      const u = await redis.get(`${P}user:${id}`)
+      if(!u) continue
+      const uObj = typeof u==='string'? parse(u):u
+      if(!uObj) continue
+      if(String(uObj.phone||'').includes(raw) || normalizePhone(uObj.phone||'').includes(normalizePhone(raw))) return uObj
+    }
+    return null
+  }
+  const u = await redis.get(`${P}user:${userId}`)
+  if(!u) return null
+  return typeof u==='string'? parse(u):u
+}
+
 const getUgDate = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' });
 const getUgDMYHM = () => {
   const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Kampala' }));
@@ -30,28 +60,24 @@ async function processStakeCommissions(buyerId, stakeAmount) {
 
   for (let i = 0; i < chain.length; i++) {
     const uplineId = chain[i];
-
-    // ONLY PAY IF UPLINE HAS ACTIVE STAKE
     const uplineHasStaked = await redis.get(P + 'stake:first:' + uplineId);
-    if (!uplineHasStaked) {
-      console.log(`Skip Team ${['A','B','C'][i]} ${uplineId} - no active stake`);
-      continue; // skip this upline, check next
-    }
+    if (!uplineHasStaked) continue;
     const stakesCount = await redis.llen(P + 'stakes:' + uplineId);
-    if (stakesCount === 0) {
-      console.log(`Skip Team ${['A','B','C'][i]} ${uplineId} - empty stakes`);
-      continue;
-    }
+    if (stakesCount === 0) continue;
 
     const reward = Math.floor(stakeAmount * rates[i]);
     if (reward <= 0) continue;
 
-    const uplineUser = await redis.get(P + 'user:' + uplineId);
+    const uplineRaw = await redis.get(P + 'user:' + uplineId);
+    const uplineUser = uplineRaw ? (typeof uplineRaw==='string'? parse(uplineRaw):uplineRaw) : null
     if (uplineUser) {
       uplineUser.balance = Number(uplineUser.balance || 0) + reward;
       uplineUser.availableBalance = Number(uplineUser.availableBalance || 0) + reward;
-      uplineUser.totalBalance = Number(uplineUser.totalBalance || uplineUser.balance || 0) + reward;
+      uplineUser.totalBalance = Number(uplineUser.totalBalance || uplineUser.balance || 0);
+      // keep totalBalance in sync
+      if(Number(uplineUser.totalBalance) < Number(uplineUser.balance)) uplineUser.totalBalance = uplineUser.balance
       await redis.set(P + 'user:' + uplineId, uplineUser);
+      try{ await redis.hset(`riot:user:${uplineId}`, { balance: uplineUser.totalBalance, totalBalance: uplineUser.totalBalance, availableBalance: uplineUser.totalBalance }) }catch{}
     }
 
     const commTx = {
@@ -73,6 +99,7 @@ async function processStakeCommissions(buyerId, stakeAmount) {
       const turboKey = P + 'turbocharge:' + uplineId;
       let turbo = await redis.get(turboKey);
       if (!turbo) turbo = { totalPower: 0, members: 0 };
+      turbo = typeof turbo==='string'? parse(turbo):turbo
       turbo.totalPower = Number(turbo.totalPower || 0) + 2;
       turbo.lastUpdate = Date.now();
       await redis.set(turboKey, turbo);
@@ -97,35 +124,36 @@ async function processStakeCommissions(buyerId, stakeAmount) {
 
 export async function POST(req) {
   try {
-    const { userId, power, amount, tab } = await req.json();
-    const stakeAmount = Number(power || amount);
-    const buyerId = String(userId);
+    const { userId, phone, power, amount, tab } = await req.json();
+    const stakeAmount = Number(String(power || amount||'').replace(/,/g,''));
+    const query = userId || phone
+    if (!query || !stakeAmount) return NextResponse.json({ success: false, message: 'Missing data' }, { status: 400 });
 
-    if (!buyerId || !stakeAmount) return NextResponse.json({ success: false, message: 'Missing data' }, { status: 400 });
+    const user = await getUserByQuery(query)
+    if (!user) return NextResponse.json({ success: false, message: 'User not found '+query }, { status: 404 });
+    const buyerId = user.userId
 
     const firstKey = P + 'stake:first:' + buyerId;
     const alreadyStaked = await redis.get(firstKey);
 
-    const user = await redis.get(P + 'user:' + buyerId);
-    if (!user) return NextResponse.json({ success: false, message: 'User not found' }, { status: 404 });
-
-    const curBal = Number(user.availableBalance ?? user.balance ?? user.totalBalance ?? 0);
+    const curBal = Number(user.totalBalance ?? user.availableBalance ?? user.balance ?? 0);
     if (curBal < stakeAmount) {
       return NextResponse.json({ success: false, error: 'Insufficient Total Balance', message: 'Insufficient Total Balance' }, { status: 400 });
     }
 
+    // DEDUCT - backend only
     user.balance = Number(user.balance || 0) - stakeAmount;
     user.availableBalance = Number(user.availableBalance || 0) - stakeAmount;
     user.totalBalance = Number(user.totalBalance || 0) - stakeAmount;
+    // ensure all fields equal after deduct
+    if(user.totalBalance <0) user.totalBalance=0
+    user.balance = user.totalBalance
+    user.availableBalance = user.totalBalance
     await redis.set(P + 'user:' + buyerId, user);
 
     try {
-      const riotKey = `riot:user:${buyerId}`;
-      const riotUser = await redis.hgetall(riotKey);
-      if (riotUser && Object.keys(riotUser).length) {
-        await redis.hincrbyfloat(riotKey, 'balance', -stakeAmount);
-        await redis.hincrbyfloat(riotKey, 'availableBalance', -stakeAmount);
-      }
+      await redis.hset(`riot:user:${buyerId}`, { balance: user.totalBalance, totalBalance: user.totalBalance, availableBalance: user.totalBalance })
+      await redis.set(`riot:user:${buyerId}:balance`, user.totalBalance)
     } catch {}
 
     const dateStr = getUgDMYHM();
@@ -164,8 +192,11 @@ export async function POST(req) {
       timestamp: Date.now(),
       dateStr: dateStr,
       date: dateStr,
-      createdAt: dateStr,
-      tab: tab || 'daily'
+      createdAt: new Date().toISOString(),
+      fullDate: new Date().toISOString(),
+      tab: tab || 'daily',
+      phone: user.phone,
+      userId: buyerId
     };
     await redis.lpush(P + 'tx:' + buyerId, JSON.stringify(tx));
     await redis.lpush(P + 'tx:history:' + buyerId, JSON.stringify(tx));

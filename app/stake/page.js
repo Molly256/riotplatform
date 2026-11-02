@@ -2,9 +2,7 @@
 import { useState, useEffect } from "react";
 import BottomNav from "@/components/BottomNav";
 
-const P = 'riot:'
-const getUgandaDate = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' }); // YYYY-MM-DD
-const getUgandaDateTime = () => new Date().toLocaleString('en-GB', { timeZone: 'Africa/Kampala', hour12: false }); // d/m/yr hr:mins
+const getUgandaDate = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' });
 const getUgandaDMY = () => {
   const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Kampala' }));
   const day = d.getDate();
@@ -30,7 +28,18 @@ export default function StakingPage() {
   useEffect(() => {
     const savedStock = JSON.parse(localStorage.getItem("outOfStock_daily") || "[]");
     setOutOfStock(savedStock);
-    const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('booksforward_user') || localStorage.getItem('user') || '{}');
+    // Load from backend - source of truth
+    const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}');
+    if(u.userId || u.phone){
+      fetch("/api/mine", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId: u.userId || u.phone }) })
+        .then(r=>r.json()).then(d=>{
+          if(d.success){
+            setBalance(Number(d.totals?.totalBalance||d.user?.totalBalance||0));
+            localStorage.setItem("riot_user", JSON.stringify(d.user));
+            localStorage.setItem("user", JSON.stringify(d.user));
+          }
+        }).catch(()=>{})
+    }
     const b = Number(u.availableBalance || u.balance || localStorage.getItem("availableBalance") || 0);
     setBalance(b);
   }, []);
@@ -55,11 +64,10 @@ export default function StakingPage() {
 
   const handleStakeClick = (item, idx) => {
     if (outOfStock.includes(idx)) return;
-    // CHECK BALANCE BEFORE CONFIRM
-    const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('booksforward_user') || localStorage.getItem('user') || '{}');
-    const curBal = Number(u.availableBalance || u.balance || 0);
+    const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}');
+    const curBal = Number(u.totalBalance || u.availableBalance || u.balance || 0);
     if (curBal < item.stakePower) {
-      showToast(`Insufficient Total Balance! Need ${item.stakePower.toLocaleString()} UGX`);
+      showToast(`Insufficient Total Balance! Need ${item.stakePower.toLocaleString()} UGX, have ${curBal.toLocaleString()} UGX`);
       return;
     }
     setSelectedItem(item);
@@ -72,56 +80,53 @@ export default function StakingPage() {
     setLoading(true);
     try {
       const amount = selectedItem.stakePower;
-      const storedUser = JSON.parse(localStorage.getItem("riot_user") || localStorage.getItem('booksforward_user') || localStorage.getItem("user") || "{}");
+      const storedUser = JSON.parse(localStorage.getItem("riot_user") || localStorage.getItem("user") || "{}");
       const phone = storedUser.phone;
       const userId = storedUser.userId || storedUser.id || storedUser.phone;
 
+      // CALL BACKEND - BACKEND ONLY DEDUCTS
       const res = await fetch("/api/stake", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, phone, power: amount, amount, tab })
+        body: JSON.stringify({ userId, phone, power: amount, amount, powerLabel: selectedItem.power, tab })
       });
       const data = await res.json();
 
       if (!res.ok || !data.success) {
-        if (data.error?.includes('Insufficient')) showToast('Insufficient Total Balance');
-        else showToast(data.message || data.error || "Stake failed");
+        showToast(data.message || data.error || "Stake failed");
         setLoading(false); setShowConfirm(false); return;
       }
 
-      // === DEDUCT IMMEDIATELY FROM Mine Total balance field ===
+      // SYNC FROM BACKEND ONLY - NO LOCAL DEDUCTION
       const updatedUser = data.user;
-      // update all storage keys Mine page reads
       localStorage.setItem("riot_user", JSON.stringify(updatedUser));
-      localStorage.setItem("booksforward_user", JSON.stringify(updatedUser));
       localStorage.setItem("user", JSON.stringify(updatedUser));
       localStorage.setItem("availableBalance", String(updatedUser.availableBalance));
-      localStorage.setItem("totalBalance", String(updatedUser.balance || updatedUser.availableBalance));
-      localStorage.setItem("balance", String(updatedUser.balance || updatedUser.availableBalance));
-      setBalance(Number(updatedUser.availableBalance));
+      localStorage.setItem("totalBalance", String(updatedUser.totalBalance));
+      localStorage.setItem("balance", String(updatedUser.balance));
+      setBalance(Number(updatedUser.totalBalance));
 
-      // === SAVE MY STAKE WITH TODAY ENABLED ===
+      // SAVE MY STAKE WITH TODAY ENABLED
       const myStakes = JSON.parse(localStorage.getItem("myStakes") || '{"daily":[],"weekend":[],"hourly":[]}');
-      const ugDate = getUgandaDate(); // for yield reset check
       const newStake = {
         ...selectedItem,
         stakedAt: new Date().toISOString(),
-        ugStakedDate: ugDate,
+        ugStakedDate: getUgandaDate(),
         idx: selectedIdx,
         collectedDays: 0,
-        lastClaimDate: '', // empty means today's yield button ENABLED immediately
-        countdown: "1/180",
-        canClaimToday: true
+        lastCollected: null, // null = enabled immediately
+        lastClaimDate: '',
+        countdown: "0/180",
+        canClaimToday: true,
+        img: selectedItem.img,
+        power: selectedItem.power,
+        daily: selectedItem.daily,
+        stakePower: selectedItem.stakePower
       };
       myStakes[tab].push(newStake);
       localStorage.setItem("myStakes", JSON.stringify(myStakes));
 
-      // === TX HISTORY WITH d/m/yr hr:mins ===
-      const txs = JSON.parse(localStorage.getItem("transactions") || "[]");
-      const dmy = getUgandaDMY();
-      txs.unshift({ type: "Stake", amount, status: "success", date: dmy, dateStr: dmy, tab, display: `Stake success ${amount.toLocaleString()} UGX` });
-      localStorage.setItem("transactions", JSON.stringify(txs));
-
+      // Out of stock
       const newStock = [...outOfStock, selectedIdx];
       setOutOfStock(newStock);
       localStorage.setItem("outOfStock_daily", JSON.stringify(newStock));
