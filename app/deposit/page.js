@@ -10,7 +10,32 @@ export default function Deposit() {
   const router = useRouter()
 
   useEffect(()=>{
-    setBalance(localStorage.getItem('riot_balance') || '0.00')
+    const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}')
+    const userId = u.userId || u.phone || u.id
+    if(!userId){
+      setBalance(localStorage.getItem('totalBalance') || '0')
+      return
+    }
+    // FIX: source of truth = /api/mine same as Mine page
+    fetch("/api/mine", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ userId })
+    })
+    .then(r=>r.json())
+    .then(d=>{
+      if(d.success){
+        const realBal = Number(d.totals?.totalBalance ?? d.user?.totalBalance ?? 0)
+        setBalance(realBal.toLocaleString())
+        localStorage.setItem("riot_user", JSON.stringify(d.user))
+        localStorage.setItem("user", JSON.stringify(d.user))
+        localStorage.setItem("totalBalance", String(realBal))
+      }
+    }).catch(()=>{})
+
+    // instant fallback so not 0 flash
+    const fb = Number(u.totalBalance || u.availableBalance || localStorage.getItem('totalBalance') || 0)
+    if(fb) setBalance(fb.toLocaleString())
   },[])
 
   function goNext(){
