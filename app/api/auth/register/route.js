@@ -29,55 +29,34 @@ export async function POST(req) {
     if (!phone || !username || !email || !password) {
       return NextResponse.json({ error: "All fields required" }, { status: 400 });
     }
-
     if (!inviterCode || !/^\d{6}$/.test(inviterCode)) {
       return NextResponse.json({ error: "Invite code required - must be 6 digits" }, { status: 400 });
     }
 
     const ip = getClientIP(req);
 
-    // === 1. VPN CHECK ===
     if (await isVPN(ip)) {
-      return NextResponse.json({ 
-        success: false,
-        error: "VPN_DETECTED",
-        message: "Can't create account with VPN on please turn off VPN" 
-      }, { status: 403 });
+      return NextResponse.json({ success: false, error: "VPN_DETECTED", message: "Can't create account with VPN on please turn off VPN" }, { status: 403 });
     }
 
-    // === 2. SAME IP CHECK - 1 ACCOUNT PER IP ===
     if (ip !== 'unknown') {
       const existingIp = await redis.get(`rp:ip:${ip}`);
       if (existingIp) {
-        return NextResponse.json({ 
-          success: false,
-          error: "IP_EXISTS",
-          message: "Can't create account in same IP address" 
-        }, { status: 403 });
+        return NextResponse.json({ success: false, error: "IP_EXISTS", message: "Can't create account in same IP address" }, { status: 403 });
       }
     }
 
     const inviterUserId = await redis.get(`rp:invite:${inviterCode}`);
-    if (!inviterUserId) {
-      return NextResponse.json({ error: "Invalid invite code - inviter not found" }, { status: 400 });
-    }
+    if (!inviterUserId) return NextResponse.json({ error: "Invalid invite code - inviter not found" }, { status: 400 });
     const inviterUser = await redis.get(`rp:user:${inviterUserId}`);
-    if (!inviterUser) {
-      return NextResponse.json({ error: "Invalid invite code - inviter not found" }, { status: 400 });
-    }
+    if (!inviterUser) return NextResponse.json({ error: "Invalid invite code - inviter not found" }, { status: 400 });
 
     const existingPhone = await redis.get(`rp:phone:${phone}`);
-    if (existingPhone) {
-      return NextResponse.json({ error: "Phone already registered" }, { status: 400 });
-    }
+    if (existingPhone) return NextResponse.json({ error: "Phone already registered" }, { status: 400 });
     const existingEmail = await redis.get(`rp:email:${email}`);
-    if (existingEmail) {
-      return NextResponse.json({ error: "Email already registered" }, { status: 400 });
-    }
+    if (existingEmail) return NextResponse.json({ error: "Email already registered" }, { status: 400 });
     const existingUsername = await redis.get(`rp:username:${username.toLowerCase()}`);
-    if (existingUsername) {
-      return NextResponse.json({ error: "Username taken" }, { status: 400 });
-    }
+    if (existingUsername) return NextResponse.json({ error: "Username taken" }, { status: 400 });
 
     let userId, inviteCodeNew;
     let tries = 0;
@@ -92,7 +71,6 @@ export async function POST(req) {
       tries++;
     } while (await redis.exists(`rp:invite:${inviteCodeNew}`) && tries < 10);
 
-    // Uganda time d/m/yr hr:mins
     const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Kampala' }));
     const dateStr = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 
@@ -108,6 +86,10 @@ export async function POST(req) {
       balance: 1000,
       totalBalance: 1000,
       availableBalance: 1000,
+      totalChargePower: 0,
+      turboAvailable: 0,
+      turboLifetime: 0,
+      totalTurboWatts: 0,
       ip,
       createdAt: Date.now(),
       createdAtStr: dateStr
@@ -120,7 +102,6 @@ export async function POST(req) {
     await redis.set(`rp:invite:${inviteCodeNew}`, userId);
     await redis.sadd("rp:all_users", userId);
 
-    // === SAVE IP FOR RESTRICTION ===
     if (ip !== 'unknown') {
       await redis.set(`rp:ip:${ip}`, userId);
       await redis.set(`rp:user:${userId}:ip`, ip);
@@ -142,7 +123,7 @@ export async function POST(req) {
     await redis.lpush(`rp:tx:history:${phone}`, JSON.stringify(tx));
     await redis.lpush(`rp:transactions:${userId}`, JSON.stringify(tx));
 
-    // TEAM A/B/C LINKING
+    // TEAM
     await redis.sadd(`rp:downlines:${inviterUserId}:level1`, userId);
     await redis.sadd(`rp:team:${inviterUserId}:A`, userId);
     await redis.set(`rp:user:${userId}:inviter`, inviterUserId);
@@ -151,7 +132,6 @@ export async function POST(req) {
     if (inviterUser.referredByUserId) {
       await redis.sadd(`rp:downlines:${inviterUser.referredByUserId}:level2`, userId);
       await redis.sadd(`rp:team:${inviterUser.referredByUserId}:B`, userId);
-      
       const level1User = await redis.get(`rp:user:${inviterUser.referredByUserId}`);
       if (level1User && level1User.referredByUserId) {
         await redis.sadd(`rp:downlines:${level1User.referredByUserId}:level3`, userId);
@@ -159,31 +139,50 @@ export async function POST(req) {
       }
     }
 
+    // FIXED TURBO - correct keys + correct shape
     const turboKey = `rp:turbocharge:${inviterUserId}`;
     let turboData = await redis.get(turboKey);
-    if (!turboData) turboData = { totalPower: 0, members: 0 };
+    if (!turboData) turboData = { totalPower: 0, members: 0, lifetime: 0 };
     
-    turboData.totalPower = Number(turboData.totalPower || 0) + 0.25;
+    turboData.totalPower = Number((Number(turboData.totalPower || 0) + 0.25).toFixed(2));
+    turboData.lifetime = Number((Number(turboData.lifetime || 0) + 0.25).toFixed(2));
     turboData.members = Number(turboData.members || 0) + 1;
     turboData.lastUpdate = Date.now();
     await redis.set(turboKey, turboData);
 
+    // update inviter user totals
+    const inviter = await redis.get(`rp:user:${inviterUserId}`);
+    if(inviter){
+      inviter.totalChargePower = turboData.totalPower;
+      inviter.turboAvailable = turboData.totalPower;
+      inviter.turboLifetime = turboData.lifetime;
+      inviter.totalTurboWatts = turboData.lifetime;
+      await redis.set(`rp:user:${inviterUserId}`, inviter);
+    }
+
+    // FIXED TX SHAPE - this is what TurbochargePage expects
     const turboTx = {
-      id: `turbo_reg_${Date.now()}`,
-      type: "turbocharge",
-      label: "Turbocharge power",
+      id: `turbo_inv_${Date.now()}_${userId}`,
+      type: "invite",
+      watts: 0.25,
+      from: phone, // FIX: was missing → caused undefined
+      display: `Received 0.25W from ${phone}`,
       amount: 0.25,
       power: 0.25,
-      note: `0.25 watts from ${userId} registration (Team A)`,
       status: "success",
       timestamp: Date.now(),
+      date: dateStr,
       dateStr: dateStr,
-      date: dateStr
+      createdAt: dateStr,
+      note: `0.25W from ${phone} registration`
     };
-    await redis.lpush(`rp:tx:${inviterUserId}:history`, JSON.stringify(turboTx));
-    await redis.lpush(`rp:turbo:${inviterUserId}:history`, JSON.stringify(turboTx));
 
-    console.log(`✅ ${inviterUserId} got 0.25 watts from ${userId} registration - IP: ${ip}`);
+    // SAVE TO ALL KEYS THAT GET READS
+    await redis.lpush(`rp:turbo:${inviterUserId}:earn_history`, JSON.stringify(turboTx));
+    await redis.lpush(`rp:turbo:${inviterUserId}:history`, JSON.stringify(turboTx));
+    await redis.lpush(`rp:tx:${inviterUserId}:history`, JSON.stringify(turboTx));
+
+    console.log(`✅ ${inviterUserId} got 0.25W from ${phone} - IP: ${ip}`);
 
     return NextResponse.json({ success: true, user });
 
