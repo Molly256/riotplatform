@@ -10,30 +10,39 @@ export default function TurbochargePage() {
   const [wattsInput, setWattsInput] = useState("");
   const [inviteLink, setInviteLink] = useState("");
   const [teamACount, setTeamACount] = useState(0);
+  const [loading, setLoading] = useState(false);
 
   const TURBO_PER_INVITE = 0.25;
   const APP_BASE_URL = "https://riotplatform-swart.vercel.app";
+
+  const getUserId = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("currentUser") || localStorage.getItem("user") || "{}");
+      return saved.userId || localStorage.getItem("userId") || localStorage.getItem("rp_userId");
+    } catch { return null; }
+  };
 
   useEffect(() => {
     const init = async () => {
       const savedUser = JSON.parse(localStorage.getItem("currentUser") || localStorage.getItem("user") || "{}");
       const code = savedUser?.inviteCode || savedUser?.referralCode || savedUser?.userId;
-      if (code) {
-        setInviteLink(`${APP_BASE_URL}/r/${code}`);
-      } else {
-        setInviteLink(`${APP_BASE_URL}/r/------`);
-      }
+      if (code) setInviteLink(`${APP_BASE_URL}/r/${code}`);
+      else setInviteLink(`${APP_BASE_URL}/r/------`);
 
-      const savedHistory = JSON.parse(localStorage.getItem("turboHistory") || "[]");
-      const savedTotal = parseFloat(localStorage.getItem("totalChargePower") || "0");
-      setRecentList(savedHistory);
-      setTotalChargePower(savedTotal);
+      const userId = getUserId();
+      if (!userId) return;
 
+      // 1. Get DB power first (truth)
       try {
-        const stored = JSON.parse(localStorage.getItem("user") || localStorage.getItem("currentUser") || "{}");
-        const userId = stored.userId || localStorage.getItem("userId") || localStorage.getItem("rp_userId");
-        if (!userId) return;
+        const turboRes = await fetch(`/api/turbocharge?userId=${userId}`);
+        const turboJson = await turboRes.json();
+        if (turboJson.success) {
+          setTotalChargePower(Number(turboJson.totalPower||0));
+        }
+      } catch {}
 
+      // 2. Get teamA
+      try {
         const res = await fetch("/api/myteam", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -52,21 +61,37 @@ export default function TurbochargePage() {
           date: m.createdAt ? new Date(m.createdAt).toLocaleString() : "Team A invite",
         }));
 
-        const total = history.length * TURBO_PER_INVITE;
-        const alreadyTotal = parseFloat(localStorage.getItem("totalChargePower") || "0");
-        const alreadyHistoryLen = JSON.parse(localStorage.getItem("turboHistory") || "[]").length;
+        setRecentList(history);
+        
+        // Sync local cache
+        localStorage.setItem("turboHistory", JSON.stringify(history));
+        localStorage.setItem("teamACount", teamA.length.toString());
 
-        if (history.length > 0 && history.length !== alreadyHistoryLen) {
-          setRecentList(history);
-          if (alreadyTotal === 0) {
-            setTotalChargePower(total);
-            localStorage.setItem("totalChargePower", total.toString());
+        // If DB power is 0, calculate from invites (first time migration)
+        if (totalChargePower === 0 && history.length > 0) {
+          const total = history.length * TURBO_PER_INVITE;
+          // Don't set yet, backend will sync on first exchange, but show locally
+          if (total > 0) {
+            const currentDb = parseFloat(localStorage.getItem("totalChargePower")||"0");
+            if (currentDb === 0) {
+              setTotalChargePower(total);
+              localStorage.setItem("totalChargePower", total.toString());
+              // Push to DB via mine init (optional)
+              await fetch("/api/turbocharge/sync", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ userId, totalPower: total })
+              }).catch(()=>{});
+            }
           }
-          localStorage.setItem("turboHistory", JSON.stringify(history));
-          localStorage.setItem("teamACount", teamA.length.toString());
         }
       } catch (e) {
         console.log("myteam fetch error", e);
+        // Fallback local
+        const savedHistory = JSON.parse(localStorage.getItem("turboHistory") || "[]");
+        const savedTotal = parseFloat(localStorage.getItem("totalChargePower") || "0");
+        if (savedHistory.length) setRecentList(savedHistory);
+        if (savedTotal) setTotalChargePower(savedTotal);
       }
     };
     init();
@@ -85,40 +110,54 @@ export default function TurbochargePage() {
 
   const ugxValue = wattsInput ? parseFloat(wattsInput) * 1000 : 0;
 
-  // === NEW LOGIC: MUST HAVE 2W+ TO EXCHANGE, NO MAX ===
-  const exchangeNow = () => {
+  const exchangeNow = async () => {
     const watts = parseFloat(wattsInput);
+    const userId = getUserId();
 
+    if (!userId) return alert("Login again");
     if (totalChargePower < 2) {
-      return alert(`Need at least 2W to exchange. You have ${totalChargePower}W. Invite ${(Math.ceil((2 - totalChargePower)/0.25))} more friends.`);
+      return alert(`Need at least 2W to exchange. You have ${totalChargePower}W. Invite ${Math.ceil((2 - totalChargePower)/0.25)} more friends.`);
     }
     if (!watts || watts <= 0) return alert("Enter watts");
     if (watts > totalChargePower) return alert(`Not enough power. You have ${totalChargePower}W`);
+    if (watts < 2) return alert("Minimum exchange is 2W");
 
-    const ugx = watts * 1000;
-    const newTotalPower = parseFloat((totalChargePower - watts).toFixed(2));
-    setTotalChargePower(newTotalPower);
-    localStorage.setItem("totalChargePower", newTotalPower.toString());
+    setLoading(true);
+    try {
+      const res = await fetch("/api/turbocharge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, watts })
+      });
+      const json = await res.json();
+      
+      if (!json.success) {
+        return alert(json.message || "Exchange failed");
+      }
 
-    const totalBal = parseInt(localStorage.getItem("totalBalance") || "0");
-    const availBal = parseInt(localStorage.getItem("availableBalance") || "0");
-    localStorage.setItem("totalBalance", (totalBal + ugx).toString());
-    localStorage.setItem("availableBalance", (availBal + ugx).toString());
+      setTotalChargePower(json.newPower);
+      localStorage.setItem("totalChargePower", json.newPower.toString());
+      localStorage.setItem("totalBalance", json.user.totalBalance?.toString() || "0");
+      localStorage.setItem("availableBalance", json.user.availableBalance?.toString() || "0");
 
-    const txs = JSON.parse(localStorage.getItem("transactions") || "[]");
-    const now = new Date();
-    const dateStr = `${now.getDate()}/${now.getMonth()+1}/${now.getFullYear()} ${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')}`;
-    txs.unshift({ type: "Turbocharge Exchange", amount: ugx, status: "success", date: dateStr, watts });
-    localStorage.setItem("transactions", JSON.stringify(txs));
+      // Update local currentUser cache for Mine page
+      try {
+        const cur = JSON.parse(localStorage.getItem("currentUser") || localStorage.getItem("user") || "{}");
+        cur.totalBalance = json.user.totalBalance;
+        cur.availableBalance = json.user.availableBalance;
+        cur.balance = json.user.balance;
+        cur.totalChargePower = json.newPower;
+        localStorage.setItem("currentUser", JSON.stringify(cur));
+        localStorage.setItem("user", JSON.stringify(cur));
+      } catch {}
 
-    fetch("/api/transactions/add", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: JSON.parse(localStorage.getItem("currentUser")||"{}")?.userId, type: "Turbocharge Exchange", amount: ugx, watts })
-    }).catch(()=>{});
-
-    setWattsInput("");
-    alert(`Success! ${watts}W = ${ugx.toLocaleString()} UGX added to Total Balance`);
+      setWattsInput("");
+      alert(`Success! ${watts}W = ${json.ugx.toLocaleString()} UGX added to Total Balance`);
+    } catch (e) {
+      alert("Network error: " + e.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const recentPowerTotal = recentList.reduce((sum, r) => sum + r.watts, 0);
@@ -194,13 +233,13 @@ export default function TurbochargePage() {
 
               <p className="text-white/40 text-[11px] mt-3">Exchange Watts</p>
               <div className="mt-1 flex items-center bg-black rounded-[10px] border border-white/10 px-3 h-[44px]">
-                <input type="number" value={wattsInput} onChange={(e) => setWattsInput(e.target.value)} placeholder={canExchange ? "Enter watts to exchange" : "Need 2W minimum"} className="flex-1 bg-transparent text-white text-[13px] outline-none" disabled={!canExchange} />
+                <input type="number" value={wattsInput} onChange={(e) => setWattsInput(e.target.value)} placeholder={canExchange ? "Enter watts to exchange" : "Need 2W minimum"} className="flex-1 bg-transparent text-white text-[13px] outline-none" disabled={!canExchange || loading} />
                 <span className="text-white/50 text-[12px]">{wattsInput || "0"} W</span>
               </div>
 
               <p className="text-white/60 text-[11px] mt-2">⚡ You will receive: {ugxValue.toLocaleString()} UGX</p>
-              <button onClick={exchangeNow} disabled={!canExchange} className={`w-full mt-3 h-[46px] rounded-[12px] font-extrabold text-[14px] ${canExchange ? "bg-[#EBA043] text-black" : "bg-white/10 text-white/30"}`}>
-                {canExchange ? "⇄ Exchange Now" : `Need ${(2 - totalChargePower).toFixed(2)}W more to unlock`}
+              <button onClick={exchangeNow} disabled={!canExchange || loading} className={`w-full mt-3 h-[46px] rounded-[12px] font-extrabold text-[14px] ${canExchange ? "bg-[#EBA043] text-black" : "bg-white/10 text-white/30"}`}>
+                {loading ? "Processing..." : canExchange ? "⇄ Exchange Now" : `Need ${(2 - totalChargePower).toFixed(2)}W more to unlock`}
               </button>
             </div>
           </div>
