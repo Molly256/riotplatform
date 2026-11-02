@@ -43,7 +43,7 @@ export default function QuickClicksPage() {
     { label: "My team", emoji: "👨‍👩‍👧", link: "/myteam" },
     { label: "Turbocharge", emoji: "🚀", link: "/turbocharge" },
     { label: "Invite", emoji: "📨", link: "/invite" },
-    { label: "Download app", emoji: "📱", link: "/download" },
+    { label: "Download app", emoji: "📱", link: "/downloadapp" },
   ];
 
   return (
