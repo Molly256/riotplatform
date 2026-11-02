@@ -3,15 +3,6 @@ import { useState, useEffect } from "react";
 import BottomNav from "@/components/BottomNav";
 
 const getUgandaDate = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' });
-const getUgandaDMY = () => {
-  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Kampala' }));
-  const day = d.getDate();
-  const month = d.getMonth()+1;
-  const year = d.getFullYear();
-  const hr = String(d.getHours()).padStart(2,'0');
-  const min = String(d.getMinutes()).padStart(2,'0');
-  return `${day}/${month}/${year} ${hr}:${min}`;
-};
 
 export default function StakingPage() {
   const [active, setActive] = useState("stake");
@@ -24,12 +15,18 @@ export default function StakingPage() {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
   const [balance, setBalance] = useState(0);
+  const [userId, setUserId] = useState('');
 
   useEffect(() => {
-    const savedStock = JSON.parse(localStorage.getItem("outOfStock_daily") || "[]");
-    setOutOfStock(savedStock);
-    // Load from backend - source of truth
     const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}');
+    const uid = u.userId || u.phone || u.id || '';
+    setUserId(uid);
+    if(!uid) return;
+
+    // PER-USER keys
+    const savedStock = JSON.parse(localStorage.getItem(`outOfStock_daily_${uid}`) || "[]");
+    setOutOfStock(savedStock);
+    
     if(u.userId || u.phone){
       fetch("/api/mine", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId: u.userId || u.phone }) })
         .then(r=>r.json()).then(d=>{
@@ -40,7 +37,7 @@ export default function StakingPage() {
           }
         }).catch(()=>{})
     }
-    const b = Number(u.availableBalance || u.balance || localStorage.getItem("availableBalance") || 0);
+    const b = Number(u.totalBalance || u.availableBalance || u.balance || 0);
     setBalance(b);
   }, []);
 
@@ -53,9 +50,9 @@ export default function StakingPage() {
     { img: "/p4.jpg",  power: "2.5W",   stakePower: 100000, daily: 2500,  total: 450000,  period: "180 Days" },
     { img: "/p5.jpg",  power: "3.0W",   stakePower: 180000, daily: 3000,  total: 540000,  period: "180 Days" },
     { img: "/p6.jpg",  power: "3.5kW",  stakePower: 250000, daily: 3500,  total: 630000,  period: "180 Days" },
-    { img: "/p7.jpg",  power: "4.5kW",  stakePower: 350000, daily: 4500,  total: 810000,  period: "180 Days" },
-    { img: "/p8.jpg",  power: "5.8kW",  stakePower: 500000, daily: 5800,  total: 1044000, period: "180 Days" },
-    { img: "/p9.jpg",  power: "8.0kW",  stakePower: 780000, daily: 8000,  total: 1440000, period: "180 Days" },
+    { img: "/p7.jpg",  power: "4.5kW",   stakePower: 350000, daily: 4500,  total: 810000,  period: "180 Days" },
+    { img: "/p8.jpg",  power: "5.8kW",   stakePower: 500000, daily: 5800,  total: 1044000, period: "180 Days" },
+    { img: "/p9.jpg",  power: "8.0kW",   stakePower: 780000, daily: 8000,  total: 1440000, period: "180 Days" },
     { img: "/p10.jpg", power: "10.0kW", stakePower: 980000, daily: 10000, total: 1800000, period: "180 Days" },
     { img: "/p11.jpg", power: "14.0MW", stakePower: 1500000,daily: 14000, total: 2520000, period: "180 Days" },
     { img: "/p12.jpg", power: "26.0MW", stakePower: 3000000,daily: 26000, total: 4680000, period: "180 Days" },
@@ -64,10 +61,8 @@ export default function StakingPage() {
 
   const handleStakeClick = (item, idx) => {
     if (outOfStock.includes(idx)) return;
-    const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}');
-    const curBal = Number(u.totalBalance || u.availableBalance || u.balance || 0);
-    if (curBal < item.stakePower) {
-      showToast(`Insufficient Total Balance! Need ${item.stakePower.toLocaleString()} UGX, have ${curBal.toLocaleString()} UGX`);
+    if (balance < item.stakePower) {
+      showToast(`Insufficient Total Balance! Need ${item.stakePower.toLocaleString()} UGX, have ${balance.toLocaleString()} UGX`);
       return;
     }
     setSelectedItem(item);
@@ -82,13 +77,12 @@ export default function StakingPage() {
       const amount = selectedItem.stakePower;
       const storedUser = JSON.parse(localStorage.getItem("riot_user") || localStorage.getItem("user") || "{}");
       const phone = storedUser.phone;
-      const userId = storedUser.userId || storedUser.id || storedUser.phone;
+      const uid = storedUser.userId || storedUser.id || storedUser.phone || userId;
 
-      // CALL BACKEND - BACKEND ONLY DEDUCTS
       const res = await fetch("/api/stake", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, phone, power: amount, amount, powerLabel: selectedItem.power, tab })
+        body: JSON.stringify({ userId: uid, phone, power: amount, amount, powerLabel: selectedItem.power, tab })
       });
       const data = await res.json();
 
@@ -97,39 +91,32 @@ export default function StakingPage() {
         setLoading(false); setShowConfirm(false); return;
       }
 
-      // SYNC FROM BACKEND ONLY - NO LOCAL DEDUCTION
       const updatedUser = data.user;
       localStorage.setItem("riot_user", JSON.stringify(updatedUser));
       localStorage.setItem("user", JSON.stringify(updatedUser));
-      localStorage.setItem("availableBalance", String(updatedUser.availableBalance));
-      localStorage.setItem("totalBalance", String(updatedUser.totalBalance));
-      localStorage.setItem("balance", String(updatedUser.balance));
       setBalance(Number(updatedUser.totalBalance));
 
-      // SAVE MY STAKE WITH TODAY ENABLED
-      const myStakes = JSON.parse(localStorage.getItem("myStakes") || '{"daily":[],"weekend":[],"hourly":[]}');
+      // PER-USER stakes
+      const myStakesKey = `myStakes_${uid}`;
+      const myStakes = JSON.parse(localStorage.getItem(myStakesKey) || '{"daily":[],"weekend":[],"hourly":[]}');
       const newStake = {
         ...selectedItem,
         stakedAt: new Date().toISOString(),
         ugStakedDate: getUgandaDate(),
         idx: selectedIdx,
         collectedDays: 0,
-        lastCollected: null, // null = enabled immediately
+        lastCollected: null,
         lastClaimDate: '',
         countdown: "0/180",
         canClaimToday: true,
-        img: selectedItem.img,
-        power: selectedItem.power,
-        daily: selectedItem.daily,
-        stakePower: selectedItem.stakePower
       };
       myStakes[tab].push(newStake);
-      localStorage.setItem("myStakes", JSON.stringify(myStakes));
+      localStorage.setItem(myStakesKey, JSON.stringify(myStakes));
 
-      // Out of stock
+      // PER-USER out of stock
       const newStock = [...outOfStock, selectedIdx];
       setOutOfStock(newStock);
-      localStorage.setItem("outOfStock_daily", JSON.stringify(newStock));
+      localStorage.setItem(`outOfStock_daily_${uid}`, JSON.stringify(newStock));
 
       setShowConfirm(false);
       setShowSuccess(true);
