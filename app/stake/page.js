@@ -4,6 +4,16 @@ import BottomNav from "@/components/BottomNav";
 
 const getUgandaDate = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' });
 
+// ONE STABLE FUNCTION - USE SAME IN MyStakePage
+const getStableUserId = () => {
+  try {
+    const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}');
+    return u.userId || u.phone || u.id || '';
+  } catch { return ''; }
+};
+const getMyStakesKey = (id) => `myStakes_${id}`;
+const getOutOfStockKey = (id) => `outOfStock_daily_${id}`;
+
 export default function StakingPage() {
   const [active, setActive] = useState("stake");
   const [tab, setTab] = useState("daily");
@@ -18,15 +28,14 @@ export default function StakingPage() {
   const [userId, setUserId] = useState('');
 
   useEffect(() => {
-    const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}');
-    const uid = u.userId || u.phone || u.id || '';
+    const uid = getStableUserId();
     setUserId(uid);
     if(!uid) return;
 
-    // PER-USER keys
-    const savedStock = JSON.parse(localStorage.getItem(`outOfStock_daily_${uid}`) || "[]");
+    const savedStock = JSON.parse(localStorage.getItem(getOutOfStockKey(uid)) || "[]");
     setOutOfStock(savedStock);
     
+    const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}');
     if(u.userId || u.phone){
       fetch("/api/mine", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId: u.userId || u.phone }) })
         .then(r=>r.json()).then(d=>{
@@ -74,15 +83,14 @@ export default function StakingPage() {
     if (loading) return;
     setLoading(true);
     try {
-      const amount = selectedItem.stakePower;
+      const uid = getStableUserId() || userId;
       const storedUser = JSON.parse(localStorage.getItem("riot_user") || localStorage.getItem("user") || "{}");
       const phone = storedUser.phone;
-      const uid = storedUser.userId || storedUser.id || storedUser.phone || userId;
 
       const res = await fetch("/api/stake", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: uid, phone, power: amount, amount, powerLabel: selectedItem.power, tab })
+        body: JSON.stringify({ userId: uid, phone, power: selectedItem.stakePower, amount: selectedItem.stakePower, powerLabel: selectedItem.power, tab })
       });
       const data = await res.json();
 
@@ -96,9 +104,14 @@ export default function StakingPage() {
       localStorage.setItem("user", JSON.stringify(updatedUser));
       setBalance(Number(updatedUser.totalBalance));
 
-      // PER-USER stakes
-      const myStakesKey = `myStakes_${uid}`;
+      // PER-USER stakes - SAME KEY LOGIC AS MyStakePage
+      const myStakesKey = getMyStakesKey(uid);
       const myStakes = JSON.parse(localStorage.getItem(myStakesKey) || '{"daily":[],"weekend":[],"hourly":[]}');
+      // ensure arrays exist
+      if(!myStakes.daily) myStakes.daily = [];
+      if(!myStakes.weekend) myStakes.weekend = [];
+      if(!myStakes.hourly) myStakes.hourly = [];
+      
       const newStake = {
         ...selectedItem,
         stakedAt: new Date().toISOString(),
@@ -113,10 +126,9 @@ export default function StakingPage() {
       myStakes[tab].push(newStake);
       localStorage.setItem(myStakesKey, JSON.stringify(myStakes));
 
-      // PER-USER out of stock
       const newStock = [...outOfStock, selectedIdx];
       setOutOfStock(newStock);
-      localStorage.setItem(`outOfStock_daily_${uid}`, JSON.stringify(newStock));
+      localStorage.setItem(getOutOfStockKey(uid), JSON.stringify(newStock));
 
       setShowConfirm(false);
       setShowSuccess(true);

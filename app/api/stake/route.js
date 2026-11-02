@@ -45,10 +45,8 @@ const getUgDMYHM = () => {
 async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {
   const rates = [0.10, 0.02, 0.01];
   const timeStr = getUgDMYHM();
-
   const parentId = await redis.get(P + 'parent:' + buyerId) || await redis.get(P + 'user:' + buyerId + ':inviter');
   if (!parentId) return;
-
   const chain = [];
   let current = String(parentId);
   for (let i = 0; i < 3; i++) {
@@ -57,17 +55,14 @@ async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {
     const nextParent = await redis.get(P + 'parent:' + current) || await redis.get(P + 'user:' + current + ':inviter');
     current = nextParent ? String(nextParent) : null;
   }
-
   for (let i = 0; i < chain.length; i++) {
     const uplineId = chain[i];
     const uplineHasStaked = await redis.get(P + 'stake:first:' + uplineId);
     if (!uplineHasStaked) continue;
     const stakesCount = await redis.llen(P + 'stakes:' + uplineId);
     if (stakesCount === 0) continue;
-
     const reward = Math.floor(stakeAmount * rates[i]);
     if (reward <= 0) continue;
-
     const uplineRaw = await redis.get(P + 'user:' + uplineId);
     const uplineUser = uplineRaw ? (typeof uplineRaw==='string'? parse(uplineRaw):uplineRaw) : null
     if (uplineUser) {
@@ -78,7 +73,6 @@ async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {
       await redis.set(P + 'user:' + uplineId, uplineUser);
       try{ await redis.hset(`riot:user:${uplineId}`, { balance: uplineUser.totalBalance, totalBalance: uplineUser.totalBalance, availableBalance: uplineUser.totalBalance }) }catch{}
     }
-
     const commTx = {
       id: `comm_${Date.now()}_${i}_${uplineId}`,
       type: i === 0 ? 'team_a_payout' : i === 1 ? 'team_b_payout' : 'team_c_payout',
@@ -93,13 +87,10 @@ async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {
     };
     await redis.lpush(P + 'tx:' + uplineId, JSON.stringify(commTx));
     await redis.lpush(P + 'tx:history:' + uplineId, JSON.stringify(commTx));
-
-    // FIX: Only Team A gets 2W first stake bonus + correct history
     if (i === 0) {
       const upline = await redis.get(P + 'user:' + uplineId);
       const uplineObj = typeof upline==='string'? parse(upline):upline;
       if(uplineObj){
-        // Available goes up, Lifetime adds new to old for Mine page
         const curAvail = Number(uplineObj.totalChargePower || uplineObj.turboAvailable || 0);
         const curLife = Number(uplineObj.turboLifetime || uplineObj.totalTurboWatts || 0);
         uplineObj.totalChargePower = Number((curAvail + 2).toFixed(2));
@@ -107,16 +98,12 @@ async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {
         uplineObj.turboLifetime = Number((curLife + 2).toFixed(2));
         uplineObj.totalTurboWatts = uplineObj.turboLifetime;
         await redis.set(P + 'user:' + uplineId, uplineObj);
-        
-        // update turbocharge key with both available and lifetime
         await redis.set(P + 'turbocharge:' + uplineId, { 
           totalPower: uplineObj.totalChargePower, 
           lifetime: uplineObj.turboLifetime,
           lastUpdate: Date.now() 
         });
       }
-
-      // FIX: push to earn_history so Recent Turbocharge shows 2W
       const turboEarn = {
         id: `turbo_earn_${Date.now()}_${uplineId}`,
         type: 'first_stake',
@@ -129,7 +116,6 @@ async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {
         display: `🔥 Received 2W - First Stake Bonus from ${buyerPhone||buyerId}`
       };
       await redis.lpush(P + 'turbo:' + uplineId + ':earn_history', JSON.stringify(turboEarn));
-      // keep old key for compatibility
       await redis.lpush(P + 'turbo:' + uplineId + ':history', JSON.stringify(turboEarn));
     }
   }
@@ -137,7 +123,7 @@ async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {
 
 export async function POST(req) {
   try {
-    const { userId, phone, power, amount, tab } = await req.json();
+    const { userId, phone, power, amount, powerLabel, tab, daily } = await req.json();
     const stakeAmount = Number(String(power || amount||'').replace(/,/g,''));
     const query = userId || phone
     if (!query || !stakeAmount) return NextResponse.json({ success: false, message: 'Missing data' }, { status: 400 });
@@ -171,11 +157,15 @@ export async function POST(req) {
     const ugDate = getUgDate();
 
     const stakeId = `stake_${Date.now()}`;
+    // FIXED: keep label "1W" for frontend REAL_STAKE_LIST
+    const label = powerLabel || String(stakeAmount);
     const stakeData = {
       id: stakeId,
       stakePower: stakeAmount,
-      power: stakeAmount,
+      power: label, // "1W" not 20000
+      powerLabel: label,
       amount: stakeAmount,
+      daily: Number(daily || 0),
       tab: tab || 'daily',
       status: 'active',
       stakedAt: new Date().toISOString(),

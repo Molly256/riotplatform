@@ -28,6 +28,14 @@ export default function MyStakePage() {
     "40.0MW": { stakePower: 5000000, daily: 40000 },
   };
 
+  const getStableUserId = () => {
+    try {
+      const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}');
+      return u.userId || u.phone || u.id || '';
+    } catch { return ''; }
+  };
+  const getMyStakesKey = (id) => `myStakes_${id}`;
+
   const getUgDateObj = (date = new Date()) => new Date(date.toLocaleString("en-US", { timeZone: "Africa/Kampala" }));
   const getUgandaDateString = (date = new Date()) => {
     const ug = getUgDateObj(date);
@@ -38,21 +46,18 @@ export default function MyStakePage() {
     return `${ug.getDate()}/${ug.getMonth()+1}/${ug.getFullYear()} ${String(ug.getHours()).padStart(2,'0')}:${String(ug.getMinutes()).padStart(2,'0')}`;
   };
 
-  const getMyStakesKey = () => {
-    const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}');
-    const id = u.userId || u.phone || u.id || uid;
-    return `myStakes_${id}`;
-  };
-
+  // 1. LOAD ONCE - NEVER RELOAD FROM STORAGE ON TICK
   useEffect(() => {
-    const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}');
-    const id = u.userId || u.phone || u.id || '';
-    setUid(id);
+    const id = getStableUserId();
     if(!id) return;
-
-    const key = `myStakes_${id}`;
+    setUid(id);
+    const key = getMyStakesKey(id);
     const saved = JSON.parse(localStorage.getItem(key) || '{"daily":[],"weekend":[],"hourly":[]}');
-    const fixed = { ...saved };
+    const fixed = {
+      daily: saved.daily || [],
+      weekend: saved.weekend || [],
+      hourly: saved.hourly || []
+    };
     Object.keys(fixed).forEach(tabKey => {
       fixed[tabKey] = fixed[tabKey].map(s => {
         const real = REAL_STAKE_LIST[s.power];
@@ -63,21 +68,20 @@ export default function MyStakePage() {
       });
     });
     setMyStakes(fixed);
-    localStorage.setItem(key, JSON.stringify(fixed));
+    // DON'T save back here - we only save after collect
+  }, []);
+
+  // 2. TICK ONLY FOR BUTTON COLOR - NO localStorage READ/WRITE
+  useEffect(() => {
     const interval = setInterval(() => setNowTick(Date.now()), 60000);
     return () => clearInterval(interval);
-  }, [nowTick]);
+  }, []);
 
   const hasCollectedTodayUganda = (item) => {
     if (!item.lastCollected) return false;
     const lastUgandaDay = getUgandaDateString(new Date(item.lastCollected));
     const todayUgandaDay = getUgandaDateString(new Date());
     return lastUgandaDay === todayUgandaDay;
-  };
-
-  const canCollect = (item) => {
-    if (item.expired || item.collectedDays >= 180) return false;
-    return !hasCollectedTodayUganda(item);
   };
 
   const handleReceiveClick = (item, indexInTab) => {
@@ -95,7 +99,6 @@ export default function MyStakePage() {
     const amount = real.daily;
     const power = collectItem.power;
     const now = new Date();
-    const dateStr = getUgDMYHM(now);
 
     const currentInState = myStakes[tab][collectIndex];
     if (hasCollectedTodayUganda(currentInState)) {
@@ -119,8 +122,13 @@ export default function MyStakePage() {
       }
     } catch {}
 
-    const updated = { ...myStakes };
-    const item = updated[tab][collectIndex];
+    // DEEP COPY - fix shallow bug
+    const updated = {
+      daily: myStakes.daily.map(s => ({...s})),
+      weekend: myStakes.weekend.map(s => ({...s})),
+      hourly: myStakes.hourly.map(s => ({...s})),
+    };
+    const item = { ...updated[tab][collectIndex] };
     item.collectedDays = (item.collectedDays||0) + 1;
     if (item.collectedDays >= 180) {
       item.expired = true;
@@ -133,9 +141,11 @@ export default function MyStakePage() {
     }
     item.daily = real.daily;
     item.stakePower = real.stakePower;
+    updated[tab][collectIndex] = item;
 
     setMyStakes(updated);
-    localStorage.setItem(getMyStakesKey(), JSON.stringify(updated));
+    const id = getStableUserId() || uid;
+    if(id) localStorage.setItem(getMyStakesKey(id), JSON.stringify(updated));
     setShowCollect(false);
   };
 

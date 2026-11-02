@@ -44,7 +44,7 @@ const getUgDateTime = () => new Date().toLocaleString('en-CA', { timeZone: 'Afri
 
 export async function POST(req){
   try{
-    const { userId, phone, amount, power } = await req.json();
+    const { userId, phone, amount, power, stakeId } = await req.json();
     const query = userId || phone
     if(!query || !amount) return NextResponse.json({ success:false, message:'Missing' }, {status:400});
     
@@ -52,14 +52,60 @@ export async function POST(req){
     if(!user) return NextResponse.json({ success:false, message:'User not found '+query }, {status:404});
     
     const amt = Number(String(amount).replace(/,/g,''));
+    const todayUg = getUgDate();
 
-    // ADD TO ALL BALANCE FIELDS
+    // 1. CHECK & UPDATE STAKES IN REDIS - PREVENT DOUBLE CLAIM
+    const stakesKey = P+'stakes:'+user.userId;
+    const stakesRaw = await redis.lrange(stakesKey, 0, 200);
+    if(stakesRaw.length > 0){
+      let stakes = stakesRaw.map(s => typeof s==='string'? parse(s):s).filter(Boolean);
+      // find stake to update - by id if provided, else first matching power that hasn't been collected today
+      let targetIndex = -1;
+      if(stakeId){
+        targetIndex = stakes.findIndex(s => s.id === stakeId);
+      } else {
+        // find first stake with this power that hasn't collected today
+        targetIndex = stakes.findIndex(s => {
+          const matchPower = String(s.power) === String(power) || String(s.powerLabel) === String(power);
+          if(!matchPower) return false;
+          if(s.collectedDays >= 180) return false;
+          return s.lastClaimDate !== todayUg && s.ugStakedDate !== todayUg ? true : s.lastClaimDate !== todayUg;
+        });
+        // fallback: any stake with same power
+        if(targetIndex === -1) targetIndex = stakes.findIndex(s => String(s.power) === String(power) || String(s.powerLabel) === String(power));
+      }
+
+      if(targetIndex !== -1){
+        const st = stakes[targetIndex];
+        // BLOCK if already collected today in Uganda
+        if(st.lastClaimDate === todayUg){
+          return NextResponse.json({ success:false, message:'Already collected today - come back 00:00 Uganda' }, {status:400});
+        }
+        if(st.collectedDays >= 180){
+          return NextResponse.json({ success:false, message:'Generator expired' }, {status:400});
+        }
+        // update
+        st.collectedDays = (st.collectedDays||0)+1;
+        st.lastClaimDate = todayUg;
+        st.lastCollected = new Date().toISOString();
+        st.countdown = st.collectedDays >= 180 ? 'Expired' : `${st.collectedDays}/180`;
+        st.expired = st.collectedDays >= 180;
+        stakes[targetIndex] = st;
+
+        // rewrite list
+        await redis.del(stakesKey);
+        for(let i=stakes.length-1; i>=0; i--){
+          await redis.lpush(stakesKey, JSON.stringify(stakes[i]));
+        }
+      }
+    }
+
+    // 2. ADD TO BALANCE
     user.balance = Number(user.balance||0)+amt;
     user.availableBalance = Number(user.availableBalance||0)+amt;
     user.totalBalance = Number(user.totalBalance||0)+amt;
     await redis.set(P+'user:'+user.userId, user);
 
-    // sync riot:user:{id} - FIXED to update totalBalance too
     try{
       await redis.hset(`riot:user:${user.userId}`, { 
         balance: user.totalBalance, 
@@ -74,11 +120,12 @@ export async function POST(req){
     const nowISO = new Date().toISOString()
     const tx = {
       id: `yield_${Date.now()}`,
-      type: 'stake_yield', // lowercase contains yield - Mine API counts it
+      type: 'stake_yield',
       label: 'Stake Yield',
       header: 'Stake Yield',
       title: 'Stake Yield',
       power,
+      stakeId: stakeId || '',
       amount: amt,
       status: 'success',
       date: dateStr,
@@ -89,12 +136,12 @@ export async function POST(req){
       timestamp: Date.now(),
       phone: user.phone,
       userId: user.userId,
-      ugandaDate: getUgDate()
+      ugandaDate: todayUg
     };
     await redis.lpush(P+'tx:'+user.userId, JSON.stringify(tx));
     await redis.lpush(P+'tx:history:'+user.userId, JSON.stringify(tx));
     await redis.lpush(P+'transactions:'+user.userId, JSON.stringify(tx));
-    await redis.lpush(P+'tx:'+user.phone+':'+getUgDate(), JSON.stringify(tx));
+    await redis.lpush(P+'tx:'+user.phone+':'+todayUg, JSON.stringify(tx));
 
     return NextResponse.json({ success:true, user, tx });
   }catch(e){ 
