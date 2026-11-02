@@ -10,6 +10,7 @@ export default function MyStakePage() {
   const [collectItem, setCollectItem] = useState(null);
   const [collectIndex, setCollectIndex] = useState(null);
   const [nowTick, setNowTick] = useState(Date.now());
+  const [uid, setUid] = useState('');
 
   const REAL_STAKE_LIST = {
     "1W": { stakePower: 20000, daily: 1000 },
@@ -37,13 +38,24 @@ export default function MyStakePage() {
     return `${ug.getDate()}/${ug.getMonth()+1}/${ug.getFullYear()} ${String(ug.getHours()).padStart(2,'0')}:${String(ug.getMinutes()).padStart(2,'0')}`;
   };
 
+  const getMyStakesKey = () => {
+    const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}');
+    const id = u.userId || u.phone || u.id || uid;
+    return `myStakes_${id}`;
+  };
+
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("myStakes") || '{"daily":[],"weekend":[],"hourly":[]}');
+    const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}');
+    const id = u.userId || u.phone || u.id || '';
+    setUid(id);
+    if(!id) return;
+
+    const key = `myStakes_${id}`;
+    const saved = JSON.parse(localStorage.getItem(key) || '{"daily":[],"weekend":[],"hourly":[]}');
     const fixed = { ...saved };
     Object.keys(fixed).forEach(tabKey => {
       fixed[tabKey] = fixed[tabKey].map(s => {
         const real = REAL_STAKE_LIST[s.power];
-        // FIX: if just staked, lastCollected should be undefined => enabled immediately
         if (s.lastCollected === undefined) s.lastCollected = null;
         if (s.collectedDays >= 180) return { ...s, expired: true, countdown: "Expired", daily: real?.daily || s.daily };
         if (real) return { ...s, daily: real.daily, stakePower: real.stakePower, total: real.daily*180, expired: false };
@@ -51,21 +63,13 @@ export default function MyStakePage() {
       });
     });
     setMyStakes(fixed);
-    localStorage.setItem("myStakes", JSON.stringify(fixed));
+    localStorage.setItem(key, JSON.stringify(fixed));
     const interval = setInterval(() => setNowTick(Date.now()), 60000);
     return () => clearInterval(interval);
   }, [nowTick]);
 
-  const powerFull = (short) => {
-    if (!short) return "";
-    if (short.includes("MW")) return short.replace("MW", " MegaWatt").replace(".0", "");
-    if (short.includes("kW")) return short.replace("kW", " KiloWatt").replace(".0", "");
-    return short.replace("W", " Watt");
-  };
-
-  // === UGANDA RESET 00:00 ===
   const hasCollectedTodayUganda = (item) => {
-    if (!item.lastCollected) return false; // null/'' => NOT collected today => button ENABLED immediately
+    if (!item.lastCollected) return false;
     const lastUgandaDay = getUgandaDateString(new Date(item.lastCollected));
     const todayUgandaDay = getUgandaDateString(new Date());
     return lastUgandaDay === todayUgandaDay;
@@ -91,7 +95,7 @@ export default function MyStakePage() {
     const amount = real.daily;
     const power = collectItem.power;
     const now = new Date();
-    const dateStr = getUgDMYHM(now); // d/m/yr hr:mins Uganda
+    const dateStr = getUgDMYHM(now);
 
     const currentInState = myStakes[tab][collectIndex];
     if (hasCollectedTodayUganda(currentInState)) {
@@ -100,8 +104,7 @@ export default function MyStakePage() {
       return;
     }
 
-    // === ADD TO Mine Total Balance immediately ===
-    const userRaw = JSON.parse(localStorage.getItem("riot_user") || localStorage.getItem("rp_user") || localStorage.getItem("user") || "{}");
+    const userRaw = JSON.parse(localStorage.getItem("riot_user") || localStorage.getItem("user") || "{}");
     const phone = userRaw.phone || userRaw.userId;
     try {
       const res = await fetch("/api/claim-yield", {
@@ -113,28 +116,8 @@ export default function MyStakePage() {
       if (data.user) {
         localStorage.setItem("riot_user", JSON.stringify(data.user));
         localStorage.setItem("user", JSON.stringify(data.user));
-        localStorage.setItem("availableBalance", String(data.user.availableBalance));
-        localStorage.setItem("totalBalance", String(data.user.balance || data.user.totalBalance));
-        localStorage.setItem("balance", String(data.user.balance));
       }
     } catch {}
-
-    // Local fallback
-    localStorage.setItem("todaysYield", (parseInt(localStorage.getItem("todaysYield")||"0")+amount).toString());
-    localStorage.setItem("totalStakeYield", (parseInt(localStorage.getItem("totalStakeYield")||"0")+amount).toString());
-    const curTotal = parseInt(localStorage.getItem("totalBalance")||"0");
-    localStorage.setItem("totalBalance", String(curTotal+amount));
-    localStorage.setItem("availableBalance", String(curTotal+amount));
-
-    const txs = JSON.parse(localStorage.getItem("transactions") || "[]");
-    txs.unshift({ 
-      type: "Stake Yield", power, stakePower: real.stakePower, amount,
-      status: "success", date: dateStr, dateStr: dateStr, dateObj: now.toISOString(),
-      ugandaDate: getUgandaDateString(now),
-      display: `Yield ${power} +${amount.toLocaleString()} UGX`,
-      collectedDays: (currentInState.collectedDays||0)+1
-    });
-    localStorage.setItem("transactions", JSON.stringify(txs));
 
     const updated = { ...myStakes };
     const item = updated[tab][collectIndex];
@@ -152,7 +135,7 @@ export default function MyStakePage() {
     item.stakePower = real.stakePower;
 
     setMyStakes(updated);
-    localStorage.setItem("myStakes", JSON.stringify(updated));
+    localStorage.setItem(getMyStakesKey(), JSON.stringify(updated));
     setShowCollect(false);
   };
 
