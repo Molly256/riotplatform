@@ -1,15 +1,12 @@
 {
   "name": "Riotplatform",
   "short_name": "Riotplatform",
-  "start_url": "/dashboard",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#000000",
   "theme_color": "#EBA043",
   "icons": [
-    {
-      "src": "/riotapp.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
+    { "src": "/riotapp-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/riotapp-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ]
 }
