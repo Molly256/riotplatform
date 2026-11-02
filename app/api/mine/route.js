@@ -72,7 +72,6 @@ export async function POST(req){
       const amt = Number(String(tx.amount||0).replace(/,/g,''))||0;
       
       if((typeLow==='deposit' || typeLow.includes('system increase')) && (status==='success' || status==='approved')){
-        // exclude registration bonus 1000 from power deposited
         if(!typeLow.includes('regist') && !typeLow.includes('bonus') && !typeLow.includes('reward')) totalPowerDeposited += amt;
       }
 
@@ -87,7 +86,6 @@ export async function POST(req){
         totalStake += amt;
       }
 
-      // FIXED: count ALL yield formats - 'Stake Yield' AND 'stake_yield'
       if((typeLow.includes('yield') || typeLow.includes('profit')) && status==='success'){
         totalStakeYield += amt;
         const dStr = (tx.dateStr || tx.date || tx.createdAt || tx.fullDate || '').toString();
@@ -118,21 +116,28 @@ export async function POST(req){
       totalTurboWattsEarned = dbTurboPower + totalTurboExchangeUGX/1000;
     }
 
-    // AUTO-REPAIR old users - if totalBalance never included yields
-    let totalBalance = Number(user.totalBalance||user.balance||0)
+    // FIXED: balance = income - stake - withdraw
     const sumIncome = totalPowerDeposited + totalStakeYield + totalTeamCommission + totalTurboExchangeUGX + 1000
-    if(totalBalance < sumIncome && sumIncome > 1000){
-      totalBalance = sumIncome
-      user.totalBalance = totalBalance
-      user.balance = totalBalance
-      user.availableBalance = totalBalance
-      await redis.set(`${P}user:${user.userId}`, user)
-      await redis.hset(`riot:user:${user.userId}`, { balance: totalBalance, totalBalance })
+    const correctBalance = Math.max(0, sumIncome - totalStake - totalWithdraw)
+    
+    let totalBalance = Number(user.totalBalance||user.balance||0)
+    
+    // Auto-repair: if stored balance is wrong, fix to correct
+    if(Math.abs(totalBalance - correctBalance) > 0.5){
+      // For old users where stored balance never included yields, or after stake it was added back
+      if(totalBalance < sumIncome || totalBalance > correctBalance){
+        totalBalance = correctBalance
+        user.totalBalance = totalBalance
+        user.balance = totalBalance
+        user.availableBalance = totalBalance
+        await redis.set(`${P}user:${user.userId}`, user)
+        try{ await redis.hset(`riot:user:${user.userId}`, { balance: totalBalance, totalBalance, availableBalance: totalBalance }) }catch{}
+      }
     }
 
     return NextResponse.json({
       success:true,
-      user: { ...user, totalBalance, balance: totalBalance },
+      user: { ...user, totalBalance, balance: totalBalance, availableBalance: totalBalance },
       totals:{
         totalPowerDeposited,
         totalWithdraw,
