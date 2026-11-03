@@ -42,11 +42,13 @@ const getUgDMYHM = () => {
   return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 };
 
+// FIXED: MIN RULE
 async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {
   const rates = [0.10, 0.02, 0.01];
   const timeStr = getUgDMYHM();
   const parentId = await redis.get(P + 'parent:' + buyerId) || await redis.get(P + 'user:' + buyerId + ':inviter');
   if (!parentId) return;
+  
   const chain = [];
   let current = String(parentId);
   for (let i = 0; i < 3; i++) {
@@ -55,14 +57,28 @@ async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {
     const nextParent = await redis.get(P + 'parent:' + current) || await redis.get(P + 'user:' + current + ':inviter');
     current = nextParent ? String(nextParent) : null;
   }
+
   for (let i = 0; i < chain.length; i++) {
     const uplineId = chain[i];
     const uplineHasStaked = await redis.get(P + 'stake:first:' + uplineId);
     if (!uplineHasStaked) continue;
-    const stakesCount = await redis.llen(P + 'stakes:' + uplineId);
-    if (stakesCount === 0) continue;
-    const reward = Math.floor(stakeAmount * rates[i]);
+
+    // Calculate upline total stake worth
+    const uplineStakesRaw = await redis.lrange(P + 'stakes:' + uplineId, 0, -1);
+    let uplineTotal = 0;
+    for (const s of uplineStakesRaw) {
+      try {
+        const obj = typeof s === 'string' ? JSON.parse(s) : s;
+        uplineTotal += Number(obj.stakePower || obj.amount || 0);
+      } catch {}
+    }
+    if (uplineTotal === 0) continue;
+
+    // MIN RULE: if inviter high, invited low = use low. If inviter low, invited high = use low
+    const usableAmount = Math.min(uplineTotal, stakeAmount);
+    const reward = Math.floor(usableAmount * rates[i]);
     if (reward <= 0) continue;
+
     const uplineRaw = await redis.get(P + 'user:' + uplineId);
     const uplineUser = uplineRaw ? (typeof uplineRaw==='string'? parse(uplineRaw):uplineRaw) : null
     if (uplineUser) {
@@ -73,12 +89,13 @@ async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {
       await redis.set(P + 'user:' + uplineId, uplineUser);
       try{ await redis.hset(`riot:user:${uplineId}`, { balance: uplineUser.totalBalance, totalBalance: uplineUser.totalBalance, availableBalance: uplineUser.totalBalance }) }catch{}
     }
+
     const commTx = {
       id: `comm_${Date.now()}_${i}_${uplineId}`,
       type: i === 0 ? 'team_a_payout' : i === 1 ? 'team_b_payout' : 'team_c_payout',
       label: `Team ${['A','B','C'][i]} Commission`,
       amount: reward,
-      display: `Team ${['A','B','C'][i]}: ${buyerId} staked ${stakeAmount.toLocaleString()} UGX`,
+      display: `Team ${['A','B','C'][i]}: ${buyerId} staked ${stakeAmount.toLocaleString()} UGX (MIN ${usableAmount.toLocaleString()}) -> ${reward.toLocaleString()} UGX`,
       status: 'success',
       timestamp: Date.now(),
       dateStr: timeStr,
@@ -87,6 +104,7 @@ async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {
     };
     await redis.lpush(P + 'tx:' + uplineId, JSON.stringify(commTx));
     await redis.lpush(P + 'tx:history:' + uplineId, JSON.stringify(commTx));
+
     if (i === 0) {
       const upline = await redis.get(P + 'user:' + uplineId);
       const uplineObj = typeof upline==='string'? parse(upline):upline;
@@ -132,7 +150,6 @@ export async function POST(req) {
     if (!user) return NextResponse.json({ success: false, message: 'User not found '+query }, { status: 404 });
     const buyerId = user.userId
 
-    // shop logic - block duplicate generator
     const existingStakes = await redis.lrange(P + 'stakes:' + buyerId, 0, -1);
     for (const s of existingStakes) {
       try {

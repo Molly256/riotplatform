@@ -36,15 +36,15 @@ export default function MyStakePage() {
     return `${ug.getFullYear()}-${String(ug.getMonth()+1).padStart(2,'0')}-${String(ug.getDate()).padStart(2,'0')}`;
   };
 
+  // FIXED: NOW CALLS /api/my-stake ONLY - NOT /api/mine
   useEffect(() => {
     const uid = getStableUserId();
     if(!uid) return;
-    fetch("/api/mine", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId: uid }) })
+    fetch("/api/my-stake", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId: uid }) })
       .then(r=>r.json()).then(d=>{
         if(d.success){
           const rawStakes = d.stakes || [];
-          setMyStakes({ daily: rawStakes.filter(s=> (s.tab||'daily')==='daily'), weekend: [], hourly: [] });
-          if(d.user) localStorage.setItem("riot_user", JSON.stringify(d.user));
+          setMyStakes({ daily: rawStakes.filter(s=> (s.tab||'daily')==='daily'), weekend: rawStakes.filter(s=> s.tab==='weekend'), hourly: rawStakes.filter(s=> s.tab==='hourly') });
         }
       }).catch(()=>{});
   }, []);
@@ -93,7 +93,6 @@ export default function MyStakePage() {
 
   return (
     <div className="min-h-screen w-full bg-[#141414] flex flex-col pb-[110px]">
-      {/* HEADER - BLACK BG + ORANGE GOLD CAPS */}
       <div className="w-full bg-[#141414] pt-10 pb-6 border-b border-white/10">
         <h1 className="text-[#EBA043] text-[28px] font-black tracking-[1px] text-center uppercase">MY STAKE</h1>
       </div>
