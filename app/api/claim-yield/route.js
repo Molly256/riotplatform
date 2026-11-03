@@ -39,7 +39,7 @@ const getUgDMYHM = () => {
   const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Kampala' }));
   return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 };
-const getUgDate = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' })
+const getUgDate = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' }) // YYYY-MM-DD Uganda
 const getUgDateTime = () => new Date().toLocaleString('en-CA', { timeZone: 'Africa/Kampala', hour12:false }).replace(',','').slice(0,19)
 
 export async function POST(req){
@@ -52,47 +52,45 @@ export async function POST(req){
     if(!user) return NextResponse.json({ success:false, message:'User not found '+query }, {status:404});
     
     const amt = Number(String(amount).replace(/,/g,''));
-    const todayUg = getUgDate();
+    const todayUg = getUgDate(); // e.g. 2026-11-03 Kampala
 
-    // 1. CHECK & UPDATE STAKES IN REDIS - PREVENT DOUBLE CLAIM
+    // 1. KEEP ALL - UPDATE ONE STAKE - BLOCK SAME DAY
     const stakesKey = P+'stakes:'+user.userId;
     const stakesRaw = await redis.lrange(stakesKey, 0, 200);
     if(stakesRaw.length > 0){
       let stakes = stakesRaw.map(s => typeof s==='string'? parse(s):s).filter(Boolean);
-      // find stake to update - by id if provided, else first matching power that hasn't been collected today
+      
       let targetIndex = -1;
       if(stakeId){
         targetIndex = stakes.findIndex(s => s.id === stakeId);
       } else {
-        // find first stake with this power that hasn't collected today
+        // find first matching power that hasn't collected TODAY
         targetIndex = stakes.findIndex(s => {
           const matchPower = String(s.power) === String(power) || String(s.powerLabel) === String(power);
           if(!matchPower) return false;
-          if(s.collectedDays >= 180) return false;
-          return s.lastClaimDate !== todayUg && s.ugStakedDate !== todayUg ? true : s.lastClaimDate !== todayUg;
+          if((s.collectedDays||0) >= 180) return false;
+          return s.lastClaimDate !== todayUg; // <-- only this check
         });
-        // fallback: any stake with same power
         if(targetIndex === -1) targetIndex = stakes.findIndex(s => String(s.power) === String(power) || String(s.powerLabel) === String(power));
       }
 
       if(targetIndex !== -1){
         const st = stakes[targetIndex];
-        // BLOCK if already collected today in Uganda
         if(st.lastClaimDate === todayUg){
-          return NextResponse.json({ success:false, message:'Already collected today - come back 00:00 Uganda' }, {status:400});
+          return NextResponse.json({ success:false, message:'Already collected today' }, {status:400});
         }
-        if(st.collectedDays >= 180){
+        if((st.collectedDays||0) >= 180){
           return NextResponse.json({ success:false, message:'Generator expired' }, {status:400});
         }
-        // update
+        // update - keeps all generators
         st.collectedDays = (st.collectedDays||0)+1;
         st.lastClaimDate = todayUg;
         st.lastCollected = new Date().toISOString();
-        st.countdown = st.collectedDays >= 180 ? 'Expired' : `${st.collectedDays}/180`;
+        st.countdown = `${st.collectedDays}/180`;
         st.expired = st.collectedDays >= 180;
         stakes[targetIndex] = st;
 
-        // rewrite list
+        // rewrite list preserving order (delete + lpush reverse)
         await redis.del(stakesKey);
         for(let i=stakes.length-1; i>=0; i--){
           await redis.lpush(stakesKey, JSON.stringify(stakes[i]));
@@ -100,38 +98,29 @@ export async function POST(req){
       }
     }
 
-    // 2. ADD TO BALANCE
+    // 2. BALANCE
     user.balance = Number(user.balance||0)+amt;
     user.availableBalance = Number(user.availableBalance||0)+amt;
     user.totalBalance = Number(user.totalBalance||0)+amt;
     await redis.set(P+'user:'+user.userId, user);
 
     try{
-      await redis.hset(`riot:user:${user.userId}`, { 
-        balance: user.totalBalance, 
-        totalBalance: user.totalBalance,
-        availableBalance: user.totalBalance 
-      })
+      await redis.hset(`riot:user:${user.userId}`, { balance: user.totalBalance, totalBalance: user.totalBalance, availableBalance: user.totalBalance })
       await redis.set(`riot:user:${user.userId}:balance`, user.totalBalance)
-      await redis.set(`riot:user:${user.userId}:totalBalance`, user.totalBalance)
     }catch{}
 
-    const dateStr = getUgDMYHM();
-    const nowISO = new Date().toISOString()
     const tx = {
       id: `yield_${Date.now()}`,
       type: 'stake_yield',
       label: 'Stake Yield',
-      header: 'Stake Yield',
-      title: 'Stake Yield',
       power,
       stakeId: stakeId || '',
       amount: amt,
       status: 'success',
-      date: dateStr,
+      date: getUgDMYHM(),
       dateStr: getUgDateTime(),
-      fullDate: nowISO,
-      createdAt: nowISO,
+      fullDate: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
       display: `Yield ${power} +${amt.toLocaleString()} UGX`,
       timestamp: Date.now(),
       phone: user.phone,
@@ -141,11 +130,9 @@ export async function POST(req){
     await redis.lpush(P+'tx:'+user.userId, JSON.stringify(tx));
     await redis.lpush(P+'tx:history:'+user.userId, JSON.stringify(tx));
     await redis.lpush(P+'transactions:'+user.userId, JSON.stringify(tx));
-    await redis.lpush(P+'tx:'+user.phone+':'+todayUg, JSON.stringify(tx));
 
     return NextResponse.json({ success:true, user, tx });
   }catch(e){ 
-    console.error(e);
     return NextResponse.json({ success:false, message:e.message }, {status:500})
   }
 }

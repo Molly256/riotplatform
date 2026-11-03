@@ -2,17 +2,13 @@
 import { useState, useEffect } from "react";
 import BottomNav from "@/components/BottomNav";
 
-const getUgandaDate = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' });
-
-// ONE STABLE FUNCTION - USE SAME IN MyStakePage
 const getStableUserId = () => {
   try {
-    const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}');
-    return u.userId || u.phone || u.id || '';
+    const u = JSON.parse(localStorage.getItem('riot_user') || '{}');
+    return u.userId || '';
   } catch { return ''; }
 };
-const getMyStakesKey = (id) => `myStakes_${id}`;
-const getOutOfStockKey = (id) => `outOfStock_daily_${id}`;
+const getOutOfStockKey = (id) => `outOfStock_${id}`; // permanent, not daily
 
 export default function StakingPage() {
   const [active, setActive] = useState("stake");
@@ -31,23 +27,19 @@ export default function StakingPage() {
     const uid = getStableUserId();
     setUserId(uid);
     if(!uid) return;
-
     const savedStock = JSON.parse(localStorage.getItem(getOutOfStockKey(uid)) || "[]");
     setOutOfStock(savedStock);
-    
-    const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}');
-    if(u.userId || u.phone){
-      fetch("/api/mine", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId: u.userId || u.phone }) })
+    const u = JSON.parse(localStorage.getItem('riot_user') || '{}');
+    if(u.userId){
+      fetch("/api/mine", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId: u.userId }) })
         .then(r=>r.json()).then(d=>{
           if(d.success){
             setBalance(Number(d.totals?.totalBalance||d.user?.totalBalance||0));
             localStorage.setItem("riot_user", JSON.stringify(d.user));
-            localStorage.setItem("user", JSON.stringify(d.user));
           }
         }).catch(()=>{})
     }
-    const b = Number(u.totalBalance || u.availableBalance || u.balance || 0);
-    setBalance(b);
+    setBalance(Number(u.totalBalance || 0));
   }, []);
 
   const showToast = (m) => { setToast(m); setTimeout(()=>setToast(''), 3000); }
@@ -71,7 +63,7 @@ export default function StakingPage() {
   const handleStakeClick = (item, idx) => {
     if (outOfStock.includes(idx)) return;
     if (balance < item.stakePower) {
-      showToast(`Insufficient Total Balance! Need ${item.stakePower.toLocaleString()} UGX, have ${balance.toLocaleString()} UGX`);
+      showToast(`Insufficient Total Balance! Need ${item.stakePower.toLocaleString()} UGX`);
       return;
     }
     setSelectedItem(item);
@@ -84,56 +76,35 @@ export default function StakingPage() {
     setLoading(true);
     try {
       const uid = getStableUserId() || userId;
-      const storedUser = JSON.parse(localStorage.getItem("riot_user") || localStorage.getItem("user") || "{}");
-      const phone = storedUser.phone;
-
+      const storedUser = JSON.parse(localStorage.getItem("riot_user") || "{}");
       const res = await fetch("/api/stake", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: uid, phone, power: selectedItem.stakePower, amount: selectedItem.stakePower, powerLabel: selectedItem.power, tab })
+        body: JSON.stringify({ 
+          userId: uid, 
+          phone: storedUser.phone, 
+          power: selectedItem.stakePower, 
+          amount: selectedItem.stakePower, 
+          powerLabel: selectedItem.power, 
+          tab,
+          daily: selectedItem.daily // FIX: send daily so Redis saves correct yield
+        })
       });
       const data = await res.json();
-
       if (!res.ok || !data.success) {
         showToast(data.message || data.error || "Stake failed");
         setLoading(false); setShowConfirm(false); return;
       }
-
       const updatedUser = data.user;
       localStorage.setItem("riot_user", JSON.stringify(updatedUser));
-      localStorage.setItem("user", JSON.stringify(updatedUser));
       setBalance(Number(updatedUser.totalBalance));
-
-      // PER-USER stakes - SAME KEY LOGIC AS MyStakePage
-      const myStakesKey = getMyStakesKey(uid);
-      const myStakes = JSON.parse(localStorage.getItem(myStakesKey) || '{"daily":[],"weekend":[],"hourly":[]}');
-      // ensure arrays exist
-      if(!myStakes.daily) myStakes.daily = [];
-      if(!myStakes.weekend) myStakes.weekend = [];
-      if(!myStakes.hourly) myStakes.hourly = [];
-      
-      const newStake = {
-        ...selectedItem,
-        stakedAt: new Date().toISOString(),
-        ugStakedDate: getUgandaDate(),
-        idx: selectedIdx,
-        collectedDays: 0,
-        lastCollected: null,
-        lastClaimDate: '',
-        countdown: "0/180",
-        canClaimToday: true,
-      };
-      myStakes[tab].push(newStake);
-      localStorage.setItem(myStakesKey, JSON.stringify(myStakes));
-
+      // FIX: NO myStakes localStorage anymore - Redis is source of truth
       const newStock = [...outOfStock, selectedIdx];
       setOutOfStock(newStock);
       localStorage.setItem(getOutOfStockKey(uid), JSON.stringify(newStock));
-
       setShowConfirm(false);
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 1800);
-
     } catch (e) {
       showToast("Stake error: " + e.message);
       setShowConfirm(false);
@@ -147,13 +118,11 @@ export default function StakingPage() {
         <h1 className="text-white text-[38px] font-extrabold text-center">Staking</h1>
         <p className="text-center text-[#EBA043] text-[12px] font-bold mt-1">Total Balance: {balance.toLocaleString()} UGX</p>
       </div>
-
       <div className="w-full px-3 flex gap-2 mb-5">
         <button onClick={() => setTab("daily")} className={`flex-1 h-[44px] rounded-[14px] font-bold text-[13px] ${tab === "daily" ? "bg-[#EBA043] text-black" : "bg-[#EBA043]/60 text-black/80"}`}>Daily Yield Staking</button>
         <button onClick={() => setTab("weekend")} className={`flex-1 h-[44px] rounded-[14px] font-bold text-[13px] ${tab === "weekend" ? "bg-[#EBA043] text-black" : "bg-[#EBA043]/60 text-black/80"}`}>Weekend Staking</button>
         <button onClick={() => setTab("hourly")} className={`flex-1 h-[44px] rounded-[14px] font-bold text-[13px] ${tab === "hourly" ? "bg-[#EBA043] text-black" : "bg-[#EBA043]/60 text-black/80"}`}>Hourly Staking</button>
       </div>
-
       {tab === "daily" && (
         <div className="w-full px-3 flex flex-col gap-4">
           {stakeList.map((item, idx) => {
@@ -182,14 +151,10 @@ export default function StakingPage() {
           })}
         </div>
       )}
-
-      {tab !== "daily" && (<div className="w-full flex-1 flex items-center justify-center mt-20"><h2 className="text-[#EBA043] text-[24px] font-extrabold">Coming soon......</h2></div>)}
-
       {showConfirm && (
         <div className="fixed inset-0 z-[1000] bg-black/70 flex items-center justify-center px-6">
           <div className="w-full max-w-[320px] bg-black border border-[#EBA043]/60 rounded-[18px] p-6 flex flex-col items-center">
             <p className="text-[#EBA043] text-[16px] font-bold text-center">Stake {selectedItem?.stakePower.toLocaleString()} UGX?</p>
-            <p className="text-white/60 text-xs mt-2">Will deduct from Total Balance</p>
             <div className="flex gap-4 mt-6">
               <button onClick={confirmYes} disabled={loading} className="w-[90px] h-[38px] bg-[#EBA043] rounded-[10px] text-black font-extrabold text-[14px]">{loading ? "..." : "Yes"}</button>
               <button onClick={() => setShowConfirm(false)} className="w-[90px] h-[38px] bg-white/20 rounded-[10px] text-white font-extrabold text-[14px]">No</button>
@@ -197,7 +162,6 @@ export default function StakingPage() {
           </div>
         </div>
       )}
-
       {showSuccess && (
         <div className="fixed inset-0 z-[1001] bg-black/60 flex items-center justify-center px-6">
           <div className="w-full max-w-[300px] bg-[#EBA043] rounded-[16px] p-5 flex items-center justify-center">
@@ -205,7 +169,6 @@ export default function StakingPage() {
           </div>
         </div>
       )}
-
       <BottomNav active={active} setActive={setActive} />
     </div>
   );

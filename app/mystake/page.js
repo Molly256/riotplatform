@@ -10,142 +10,82 @@ export default function MyStakePage() {
   const [collectItem, setCollectItem] = useState(null);
   const [collectIndex, setCollectIndex] = useState(null);
   const [nowTick, setNowTick] = useState(Date.now());
-  const [uid, setUid] = useState('');
 
   const REAL_STAKE_LIST = {
-    "1W": { stakePower: 20000, daily: 1000 },
-    "1.5W": { stakePower: 36000, daily: 1500 },
-    "1.7W": { stakePower: 50000, daily: 1700 },
-    "2.5W": { stakePower: 100000, daily: 2500 },
-    "3.0W": { stakePower: 180000, daily: 3000 },
-    "3.5kW": { stakePower: 250000, daily: 3500 },
-    "4.5kW": { stakePower: 350000, daily: 4500 },
-    "5.8kW": { stakePower: 500000, daily: 5800 },
-    "8.0kW": { stakePower: 780000, daily: 8000 },
-    "10.0kW": { stakePower: 980000, daily: 10000 },
-    "14.0MW": { stakePower: 1500000, daily: 14000 },
-    "26.0MW": { stakePower: 3000000, daily: 26000 },
-    "40.0MW": { stakePower: 5000000, daily: 40000 },
+    "1W": { stakePower: 20000, daily: 1000, img: "/p1.jpg" },
+    "1.5W": { stakePower: 36000, daily: 1500, img: "/p2.jpg" },
+    "1.7W": { stakePower: 50000, daily: 1700, img: "/p3.jpg" },
+    "2.5W": { stakePower: 100000, daily: 2500, img: "/p4.jpg" },
+    "3.0W": { stakePower: 180000, daily: 3000, img: "/p5.jpg" },
+    "3.5kW": { stakePower: 250000, daily: 3500, img: "/p6.jpg" },
+    "4.5kW": { stakePower: 350000, daily: 4500, img: "/p7.jpg" },
+    "5.8kW": { stakePower: 500000, daily: 5800, img: "/p8.jpg" },
+    "8.0kW": { stakePower: 780000, daily: 8000, img: "/p9.jpg" },
+    "10.0kW": { stakePower: 980000, daily: 10000, img: "/p10.jpg" },
+    "14.0MW": { stakePower: 1500000, daily: 14000, img: "/p11.jpg" },
+    "26.0MW": { stakePower: 3000000, daily: 26000, img: "/p12.jpg" },
+    "40.0MW": { stakePower: 5000000, daily: 40000, img: "/p13.jpg" },
   };
 
   const getStableUserId = () => {
-    try {
-      const u = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}');
-      return u.userId || u.phone || u.id || '';
-    } catch { return ''; }
+    try { const u = JSON.parse(localStorage.getItem('riot_user') || '{}'); return u.userId || ''; } catch { return ''; }
   };
-  const getMyStakesKey = (id) => `myStakes_${id}`;
-
-  const getUgDateObj = (date = new Date()) => new Date(date.toLocaleString("en-US", { timeZone: "Africa/Kampala" }));
-  const getUgandaDateString = (date = new Date()) => {
-    const ug = getUgDateObj(date);
-    return `${ug.getFullYear()}-${ug.getMonth()+1}-${ug.getDate()}`;
-  };
-  const getUgDMYHM = (date = new Date()) => {
-    const ug = getUgDateObj(date);
-    return `${ug.getDate()}/${ug.getMonth()+1}/${ug.getFullYear()} ${String(ug.getHours()).padStart(2,'0')}:${String(ug.getMinutes()).padStart(2,'0')}`;
+  const getUgDateObj = (d = new Date()) => new Date(d.toLocaleString("en-US", { timeZone: "Africa/Kampala" }));
+  const getUgandaDateString = (d = new Date()) => {
+    const ug = getUgDateObj(d);
+    return `${ug.getFullYear()}-${String(ug.getMonth()+1).padStart(2,'0')}-${String(ug.getDate()).padStart(2,'0')}`;
   };
 
-  // 1. LOAD ONCE - NEVER RELOAD FROM STORAGE ON TICK
   useEffect(() => {
-    const id = getStableUserId();
-    if(!id) return;
-    setUid(id);
-    const key = getMyStakesKey(id);
-    const saved = JSON.parse(localStorage.getItem(key) || '{"daily":[],"weekend":[],"hourly":[]}');
-    const fixed = {
-      daily: saved.daily || [],
-      weekend: saved.weekend || [],
-      hourly: saved.hourly || []
-    };
-    Object.keys(fixed).forEach(tabKey => {
-      fixed[tabKey] = fixed[tabKey].map(s => {
-        const real = REAL_STAKE_LIST[s.power];
-        if (s.lastCollected === undefined) s.lastCollected = null;
-        if (s.collectedDays >= 180) return { ...s, expired: true, countdown: "Expired", daily: real?.daily || s.daily };
-        if (real) return { ...s, daily: real.daily, stakePower: real.stakePower, total: real.daily*180, expired: false };
-        return s;
-      });
-    });
-    setMyStakes(fixed);
-    // DON'T save back here - we only save after collect
+    const uid = getStableUserId();
+    if(!uid) return;
+    fetch("/api/mine", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId: uid }) })
+      .then(r=>r.json()).then(d=>{
+        if(d.success){
+          const rawStakes = d.stakes || [];
+          setMyStakes({ daily: rawStakes.filter(s=> (s.tab||'daily')==='daily'), weekend: [], hourly: [] });
+          if(d.user) localStorage.setItem("riot_user", JSON.stringify(d.user));
+        }
+      }).catch(()=>{});
   }, []);
 
-  // 2. TICK ONLY FOR BUTTON COLOR - NO localStorage READ/WRITE
   useEffect(() => {
-    const interval = setInterval(() => setNowTick(Date.now()), 60000);
-    return () => clearInterval(interval);
+    const i = setInterval(()=> setNowTick(Date.now()), 60000);
+    return ()=> clearInterval(i);
   }, []);
 
   const hasCollectedTodayUganda = (item) => {
-    if (!item.lastCollected) return false;
-    const lastUgandaDay = getUgandaDateString(new Date(item.lastCollected));
-    const todayUgandaDay = getUgandaDateString(new Date());
-    return lastUgandaDay === todayUgandaDay;
+    if (!item.lastClaimDate) return false;
+    return item.lastClaimDate === getUgandaDateString(new Date());
   };
 
-  const handleReceiveClick = (item, indexInTab) => {
-    const real = REAL_STAKE_LIST[item.power];
-    if (!real) return alert("Invalid stake");
-    if (item.expired || item.collectedDays >= 180) return alert("Generator expired after 180 days");
-    if (hasCollectedTodayUganda(item)) return alert("All done for today - come back at 00:00 Uganda time");
-    setCollectItem({ ...item, daily: real.daily, stakePower: real.stakePower });
-    setCollectIndex(indexInTab);
+  const handleReceiveClick = (item, idx) => {
+    if (item.collectedDays >= 180) return;
+    if (hasCollectedTodayUganda(item)) return;
+    setCollectItem(item);
+    setCollectIndex(idx);
     setShowCollect(true);
   };
 
   const confirmCollect = async () => {
-    const real = REAL_STAKE_LIST[collectItem.power];
-    const amount = real.daily;
-    const power = collectItem.power;
-    const now = new Date();
-
-    const currentInState = myStakes[tab][collectIndex];
-    if (hasCollectedTodayUganda(currentInState)) {
-      alert("Already collected today");
-      setShowCollect(false);
-      return;
-    }
-
-    const userRaw = JSON.parse(localStorage.getItem("riot_user") || localStorage.getItem("user") || "{}");
-    const phone = userRaw.phone || userRaw.userId;
+    const uid = getStableUserId();
     try {
       const res = await fetch("/api/claim-yield", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: phone, amount, power })
+        body: JSON.stringify({ userId: uid, amount: collectItem.daily, power: collectItem.powerLabel || collectItem.power, stakeId: collectItem.id })
       });
       const data = await res.json();
-      if (data.user) {
-        localStorage.setItem("riot_user", JSON.stringify(data.user));
-        localStorage.setItem("user", JSON.stringify(data.user));
-      }
+      if (!res.ok || !data.success) { alert(data.message||"Claim failed"); setShowCollect(false); return; }
+      if (data.user) localStorage.setItem("riot_user", JSON.stringify(data.user));
+      const updated = [...myStakes.daily];
+      updated[collectIndex] = {
+        ...updated[collectIndex],
+        lastClaimDate: getUgandaDateString(new Date()),
+        collectedDays: (updated[collectIndex].collectedDays||0)+1,
+      };
+      setMyStakes({ ...myStakes, daily: updated });
     } catch {}
-
-    // DEEP COPY - fix shallow bug
-    const updated = {
-      daily: myStakes.daily.map(s => ({...s})),
-      weekend: myStakes.weekend.map(s => ({...s})),
-      hourly: myStakes.hourly.map(s => ({...s})),
-    };
-    const item = { ...updated[tab][collectIndex] };
-    item.collectedDays = (item.collectedDays||0) + 1;
-    if (item.collectedDays >= 180) {
-      item.expired = true;
-      item.countdown = "Expired";
-      item.expiredAt = now.toISOString();
-    } else {
-      item.countdown = `${item.collectedDays}/180`;
-      item.lastCollected = now.toISOString();
-      item.lastCollectedUgandaDate = getUgandaDateString(now);
-    }
-    item.daily = real.daily;
-    item.stakePower = real.stakePower;
-    updated[tab][collectIndex] = item;
-
-    setMyStakes(updated);
-    const id = getStableUserId() || uid;
-    if(id) localStorage.setItem(getMyStakesKey(id), JSON.stringify(updated));
     setShowCollect(false);
   };
 
@@ -153,9 +93,9 @@ export default function MyStakePage() {
 
   return (
     <div className="min-h-screen w-full bg-[#141414] flex flex-col pb-[110px]">
-      <div className="w-full bg-[#EBA043] pt-8 pb-6">
-        <h1 className="text-black text-[26px] font-extrabold text-center">My stake</h1>
-        <p className="text-black/60 text-[11px] text-center mt-1">Resets 00:00 Uganda - {getUgDateObj().toLocaleString("en-UG", { timeZone: "Africa/Kampala" })}</p>
+      {/* HEADER - BLACK BG + ORANGE GOLD CAPS */}
+      <div className="w-full bg-[#141414] pt-10 pb-6 border-b border-white/10">
+        <h1 className="text-[#EBA043] text-[28px] font-black tracking-[1px] text-center uppercase">MY STAKE</h1>
       </div>
 
       <div className="w-full px-3 flex gap-2 my-5">
@@ -169,27 +109,27 @@ export default function MyStakePage() {
           <div className="w-full flex flex-col items-center mt-20"><p className="text-white/50 text-[14px]">No staked generators in {tab}</p></div>
         ) : (
           currentList.map((item, idx) => {
-            const real = REAL_STAKE_LIST[item.power] || item;
+            const real = REAL_STAKE_LIST[item.powerLabel || item.power] || item;
+            void nowTick;
             const collectedToday = hasCollectedTodayUganda(item);
-            const isExpired = item.expired || item.collectedDays >= 180;
+            const isExpired = (item.collectedDays||0) >= 180;
             const isReady = !isExpired && !collectedToday;
             return (
-              <div key={idx} className={`w-full bg-[#181B22] border rounded-[16px] p-3 flex gap-3 ${isExpired ? "border-red-500/40 opacity-60" : collectedToday ? "border-white/10 opacity-80" : "border-[#EBA043]/40"}`}>
+              <div key={item.id || idx} className="w-full bg-[#181B22] border border-[#EBA043]/20 rounded-[16px] p-3 flex gap-3">
                 <div className="w-[125px] shrink-0 flex flex-col gap-2">
                   <div className="w-full h-[135px] bg-black rounded-[12px] overflow-hidden border border-[#EBA043]/20 relative">
-                    <img src={item.img} alt="" className="w-full h-full object-cover" />
-                    <div className="absolute top-[6px] left-[6px] bg-black/80 border border-[#EBA043]/60 text-[#EBA043] text-[11px] font-extrabold px-2 py-1 rounded-[8px]">{item.power}</div>
-                    {isExpired && <div className="absolute inset-0 bg-black/70 flex items-center justify-center"><span className="bg-red-600 text-white font-black text-[12px] px-3 py-1 rounded-full">EXPIRED</span></div>}
+                    <img src={real.img || item.img} alt="" className="w-full h-full object-cover" />
+                    <div className="absolute top-[6px] left-[6px] bg-black/80 border border-[#EBA043]/60 text-[#EBA043] text-[11px] font-extrabold px-2 py-1 rounded-[8px]">{item.powerLabel || item.power}</div>
                   </div>
-                  <button onClick={() => handleReceiveClick(item, idx)} disabled={!isReady} className={`w-full h-[36px] rounded-[10px] font-extrabold text-[11px] ${isExpired ? "bg-red-900/50 text-white/40" : collectedToday ? "bg-[#3a3a3a] text-white/60" : "bg-[#EBA043] text-black animate-pulse"}`}>
+                  <button onClick={() => handleReceiveClick(item, idx)} disabled={!isReady} className={`w-full h-[36px] rounded-[10px] font-extrabold text-[11px] ${isExpired ? "bg-red-900/50 text-white/40" : collectedToday ? "bg-[#3a3a3a] text-white/60" : "bg-[#EBA043] text-black"}`}>
                     {isExpired ? "Expired" : collectedToday ? "All done for today" : "Receive Today's Yield"}
                   </button>
                 </div>
                 <div className="flex-1 flex flex-col justify-start pt-1">
                   <div className="flex flex-col gap-[10px]">
-                    <div className="flex justify-between items-center"><span className="text-white/60 text-[11px]">Stake power</span><span className="text-white font-bold text-[11px]">{real.stakePower.toLocaleString()} UGX</span></div>
-                    <div className="flex justify-between items-center"><span className="text-white/60 text-[11px]">Stake yield</span><span className="text-white font-bold text-[11px]">{real.daily.toLocaleString()} UGX</span></div>
-                    <div className="flex justify-between items-center border-t border-white/10 pt-2 mt-1"><span className="text-white/60 text-[11px]">{isExpired ? "Status" : "Countdown"}</span><span className={`font-extrabold text-[11px] ${isExpired ? "text-red-400" : collectedToday ? "text-white/40" : "text-[#EBA043]"}`}>{isExpired ? "Expired" : collectedToday ? "Resets 00:00 Uganda" : item.countdown || "0/180"}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-white/60 text-[11px]">Stake power</span><span className="text-white font-bold text-[11px]">{(real.stakePower || item.stakePower).toLocaleString()} UGX</span></div>
+                    <div className="flex justify-between items-center"><span className="text-white/60 text-[11px]">Stake yield</span><span className="text-white font-bold text-[11px]">{(real.daily || item.daily).toLocaleString()} UGX</span></div>
+                    <div className="flex justify-between items-center border-t border-white/10 pt-2 mt-1"><span className="text-white/60 text-[11px]">Countdown</span><span className="text-[#EBA043] font-extrabold text-[11px]">{item.collectedDays||0}/180</span></div>
                   </div>
                 </div>
               </div>
@@ -201,17 +141,16 @@ export default function MyStakePage() {
       {showCollect && collectItem && (
         <div className="fixed inset-0 z-[1000] bg-black/70 flex items-center justify-center px-6">
           <div className="w-full max-w-[320px] bg-black border border-[#EBA043]/60 rounded-[18px] p-6 flex flex-col items-center">
-            <p className="text-[#EBA043] text-[14px] font-bold text-center">Tap to collect stake yield of</p>
-            <p className="text-[#EBA043] text-[20px] font-extrabold mt-2">💎 {REAL_STAKE_LIST[collectItem.power]?.daily.toLocaleString()} UGX</p>
-            <p className="text-white/40 text-[11px] mt-1">{getUgandaDateString()} - Day {(myStakes[tab][collectIndex]?.collectedDays||0)+1}/180</p>
+            <p className="text-[#EBA043] text-[14px] font-bold text-center">Collect yield</p>
+            <p className="text-[#EBA043] text-[20px] font-extrabold mt-2">💎 {(REAL_STAKE_LIST[collectItem.powerLabel || collectItem.power]?.daily || collectItem.daily).toLocaleString()} UGX</p>
+            <p className="text-white/40 text-[11px] mt-1">Day {(collectItem.collectedDays||0)+1}/180</p>
             <div className="flex gap-4 mt-6 w-full">
               <button onClick={confirmCollect} className="flex-1 h-[42px] bg-[#EBA043] rounded-[10px] text-black font-extrabold text-[13px]">Collect</button>
-              <button onClick={() => setShowCollect(false)} className="flex-1 h-[42px] bg-white/10 border border-[#EBA043]/40 rounded-[10px] text-white font-bold text-[13px]">Cancel</button>
+              <button onClick={() => setShowCollect(false)} className="flex-1 h-[42px] bg-white/10 rounded-[10px] text-white font-bold text-[13px]">Cancel</button>
             </div>
           </div>
         </div>
       )}
-
       <BottomNav active={active} setActive={setActive} />
     </div>
   );

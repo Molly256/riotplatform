@@ -132,9 +132,20 @@ export async function POST(req) {
     if (!user) return NextResponse.json({ success: false, message: 'User not found '+query }, { status: 404 });
     const buyerId = user.userId
 
+    // shop logic - block duplicate generator
+    const existingStakes = await redis.lrange(P + 'stakes:' + buyerId, 0, -1);
+    for (const s of existingStakes) {
+      try {
+        const obj = typeof s === 'string' ? JSON.parse(s) : s;
+        const existingLabel = obj.powerLabel || obj.power;
+        if (existingLabel === powerLabel) {
+          return NextResponse.json({ success: false, message: 'Already staked this generator' }, { status: 400 });
+        }
+      } catch {}
+    }
+
     const firstKey = P + 'stake:first:' + buyerId;
     const alreadyStaked = await redis.get(firstKey);
-
     const curBal = Number(user.totalBalance ?? user.availableBalance ?? user.balance ?? 0);
     if (curBal < stakeAmount) {
       return NextResponse.json({ success: false, error: 'Insufficient Total Balance', message: 'Insufficient Total Balance' }, { status: 400 });
@@ -155,17 +166,17 @@ export async function POST(req) {
 
     const dateStr = getUgDMYHM();
     const ugDate = getUgDate();
-
     const stakeId = `stake_${Date.now()}`;
-    // FIXED: keep label "1W" for frontend REAL_STAKE_LIST
     const label = powerLabel || String(stakeAmount);
+    const dailyYield = Number(daily) > 0 ? Number(daily) : Math.floor(stakeAmount * 0.05);
+
     const stakeData = {
       id: stakeId,
       stakePower: stakeAmount,
-      power: label, // "1W" not 20000
+      power: label,
       powerLabel: label,
       amount: stakeAmount,
-      daily: Number(daily || 0),
+      daily: dailyYield,
       tab: tab || 'daily',
       status: 'active',
       stakedAt: new Date().toISOString(),
