@@ -7,7 +7,7 @@ export default function InvitePage() {
   const [user, setUser] = useState(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
-  const APP_BASE_URL = "https://riotplatform-swart.vercel.app";
+  const APP_BASE_URL = "https://riotplatfom.com";
 
   useEffect(() => {
     const saved = JSON.parse(localStorage.getItem("currentUser") || "null");

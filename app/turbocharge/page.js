@@ -16,7 +16,7 @@ export default function TurbochargePage() {
 
   const TURBO_PER_INVITE = 0.25;
   const FIRST_STAKE_BONUS = 2;
-  const APP_BASE_URL = "https://riotplatform-swart.vercel.app";
+  const APP_BASE_URL = "https://riotplatfom.com";
 
   const getUserId = () => {
     try {
