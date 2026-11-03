@@ -15,7 +15,15 @@ async function getUserByQuery(q){
   if(!q) return null
   const raw = String(q).trim()
   const low = raw.toLowerCase()
-  let userId = await redis.get(`${P}phone:${raw}`)
+
+  // FIXED: CHECK USERID FIRST - fastest and always works
+  let userId = null
+  if(/^\d{4,6}$/.test(raw)){
+    const exists = await redis.exists(`${P}user:${raw}`)
+    if(exists) userId = raw
+  }
+  
+  if(!userId) userId = await redis.get(`${P}phone:${raw}`)
   if(!userId) userId = await redis.get(`${P}phone:${normalizePhone(raw)}`)
   if(!userId) userId = await redis.get(`${P}username:${low}`)
   if(!userId) userId = await redis.get(`${P}email:${low}`)
@@ -75,9 +83,10 @@ export async function GET(req){
 export async function POST(req){
   try{
     const body = await req.json()
-    let { action, id, txId, status, password, phone, q, amount, type } = body
+    let { action, id, txId, status, password, phone, q, amount, type, userId, username } = body
     const actualId = id || txId
-    const query = q || phone || ''
+    // FIXED: NOW CHECKS userId FIRST - THIS WAS THE BUG!
+    const query = body.userId || userId || q || phone || username || ''
 
     if(action==='success' || action==='failed' || action==='approve' || action==='reject' || action==='updateStatus'){
       const finalStatus = (status==='success' || action==='approve' || action==='success') ? 'success' : 'failed'

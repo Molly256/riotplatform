@@ -99,12 +99,21 @@ export default function Admin(){
     else showToast(data.error||'Failed')
   }
 
+  // FIXED - NOW SENDS USERID DIRECTLY, NO MORE "USER NOT FOUND"
   const handleAdminDeposit=async()=>{
     const amt=Number(depositAmount.replace(/,/g,''))
     if(!amt || amt<=0) return showToast('Enter valid amount')
+    if(!depositUser || !depositUser.userId) return showToast('Search user first')
     const res=await fetch('/api/admin',{
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ action:'adminDeposit', phone: depositUser.phone||depositQ, q: depositQ, amount: amt })
+      body: JSON.stringify({ 
+        action:'adminDeposit', 
+        userId: depositUser.userId,
+        phone: depositUser.phone,
+        username: depositUser.username,
+        q: depositUser.userId,
+        amount: amt 
+      })
     })
     const data=await res.json()
     if(data.success){
