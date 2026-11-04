@@ -3,12 +3,10 @@ import { useState, useEffect } from "react";
 import BottomNav from "@/components/BottomNav";
 
 export default function MyStakePage() {
-  const [active, setActive] = useState("mystake");
   const [tab, setTab] = useState("daily");
   const [myStakes, setMyStakes] = useState({ daily: [], weekend: [], hourly: [] });
   const [showCollect, setShowCollect] = useState(false);
   const [collectItem, setCollectItem] = useState(null);
-  const [collectIndex, setCollectIndex] = useState(null);
 
   const REAL_STAKE_LIST = {
     "1W": { stakePower: 20000, daily: 1000, img: "/p1.jpg" },
@@ -27,11 +25,10 @@ export default function MyStakePage() {
   };
 
   const getStableUserId = () => {
-    try { const u = JSON.parse(localStorage.getItem('riot_user') || '{}'); return u.userId || u.id || ''; } catch { return ''; }
+    try { const u = JSON.parse(localStorage.getItem('riot_user') || '{}'); return u.userId || u.id || u.phone || ''; } catch { return ''; }
   };
   const getUgDateStr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' });
 
-  // FIXED: Day count based on DATE not collection
   const calcDayCount = (ugStakedDate) => {
     if(!ugStakedDate) return 0;
     try {
@@ -45,39 +42,34 @@ export default function MyStakePage() {
   const loadStakes = async () => {
     const uid = getStableUserId();
     if(!uid) return;
-    const res = await fetch("/api/my-stake", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId: uid }) });
-    const d = await res.json();
-    if(d.success){
-      const raw = Array.isArray(d.stakes) ? d.stakes : [];
-      setMyStakes({ 
-        daily: raw.filter(s=> (s.tab||'daily')==='daily'), 
-        weekend: raw.filter(s=> s.tab==='weekend'), 
-        hourly: raw.filter(s=> s.tab==='hourly') 
-      });
-    }
+    try{
+      const res = await fetch("/api/my-stake", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId: uid }) });
+      const d = await res.json();
+      if(d.success){
+        const raw = Array.isArray(d.stakes) ? d.stakes : [];
+        setMyStakes({ 
+          daily: raw.filter(s=> (s.tab||'daily')==='daily'), 
+          weekend: raw.filter(s=> s.tab==='weekend'), 
+          hourly: raw.filter(s=> s.tab==='hourly') 
+        });
+      }
+    }catch(e){ console.error(e); }
   };
 
-  useEffect(() => { loadStakes(); }, []);
+  useEffect(() => { loadStakes(); const i = setInterval(() => loadStakes(), 60000); return () => clearInterval(i); }, []);
   
-  // Midnight reset every 60s - gold button at 00:00 Kampala
-  useEffect(() => {
-    const i = setInterval(() => loadStakes(), 60000);
-    return () => clearInterval(i);
-  }, []);
-
   const hasCollectedToday = (item) => item?.lastClaimDate === getUgDateStr();
 
-  const handleReceiveClick = (item, idx) => {
+  const handleReceiveClick = (item) => {
     if (calcDayCount(item.ugStakedDate) >= 180) return;
     if (hasCollectedToday(item)) return;
-    setCollectItem(item); setCollectIndex(idx); setShowCollect(true);
+    setCollectItem(item); setShowCollect(true);
   };
 
   const confirmCollect = async () => {
     if(!collectItem) return;
     const uid = getStableUserId();
     try {
-      // SECURE: Only send stakeId, backend knows daily from powerLabel
       const res = await fetch("/api/claim-yield", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -92,26 +84,55 @@ export default function MyStakePage() {
   };
 
   const currentList = myStakes[tab] || [];
+
   return (
     <div className="min-h-screen w-full bg-[#141414] flex flex-col pb-[110px]">
-      {/* ... your same JSX ... */}
-      {currentList.map((item, idx) => {
-        const real = REAL_STAKE_LIST[item.powerLabel || item.power] || {};
-        const dayCount = calcDayCount(item.ugStakedDate); // 1/180 even if not collected
-        const collectedToday = hasCollectedToday(item);
-        const isExpired = dayCount >= 180;
-        const isReady = !isExpired && !collectedToday;
-        return (
-          <div key={item.id} className="w-full bg-[#181B22] border border-[#EBA043]/20 rounded-[16px] p-3 flex gap-3">
-            {/* ... same ... */}
-            <button onClick={() => handleReceiveClick(item, idx)} disabled={!isReady} className={`w-full h-[36px] rounded-[10px] font-extrabold text-[11px] ${isExpired ? "bg-red-900/50 text-white/40" : collectedToday ? "bg-[#3a3a3a] text-white/60" : "bg-[#EBA043] text-black"}`}>
-              {isExpired ? "Expired" : collectedToday ? "All done for today" : "Receive Today's Yield"}
-            </button>
-            {/* Countdown now uses dayCount not collectedDays */}
-            <span className="text-[#EBA043] font-extrabold text-[11px]">{dayCount}/180</span>
+      <div className="flex gap-2 p-4">
+        <button onClick={()=>setTab("daily")} className={`px-4 py-2 rounded ${tab==="daily"?"bg-[#EBA043] text-black":"bg-[#232323] text-white"}`}>Daily</button>
+        <button onClick={()=>setTab("weekend")} className={`px-4 py-2 rounded ${tab==="weekend"?"bg-[#EBA043] text-black":"bg-[#232323] text-white"}`}>Weekend</button>
+        <button onClick={()=>setTab("hourly")} className={`px-4 py-2 rounded ${tab==="hourly"?"bg-[#EBA043] text-black":"bg-[#232323] text-white"}`}>Hourly</button>
+      </div>
+
+      <div className="px-4 flex flex-col gap-3">
+        {currentList.length===0 && <div className="text-white/50 text-center py-20">No generators in {tab}. Buy in Shop.</div>}
+        {currentList.map((item, idx) => {
+          const real = REAL_STAKE_LIST[item.powerLabel || item.power] || { daily: item.daily || 0, stakePower: 0, img: "" };
+          const dayCount = calcDayCount(item.ugStakedDate);
+          const collectedToday = hasCollectedToday(item);
+          const isExpired = dayCount >= 180;
+          const isReady = !isExpired && !collectedToday;
+          return (
+            <div key={item.id || idx} className="w-full bg-[#181B22] border border-[#EBA043]/20 rounded-[16px] p-3 flex gap-3">
+              <img src={real.img} alt="" className="w-[70px] h-[70px] rounded object-cover bg-[#222]" />
+              <div className="flex-1 flex flex-col gap-1">
+                <div className="text-white font-bold text-[13px]">{item.powerLabel || item.power} Generator</div>
+                <div className="text-white/60 text-[11px]">Daily: {real.daily?.toLocaleString()} UGX</div>
+                <div className="flex items-center justify-between mt-1">
+                  <span className="text-[#EBA043] font-extrabold text-[11px]">{dayCount}/180</span>
+                  <span className="text-white/40 text-[10px]">{item.ugStakedDate || ""}</span>
+                </div>
+                <button onClick={() => handleReceiveClick(item)} disabled={!isReady} className={`w-full h-[36px] mt-2 rounded-[10px] font-extrabold text-[11px] ${isExpired ? "bg-red-900/50 text-white/40" : collectedToday ? "bg-[#3a3a3a] text-white/60" : "bg-[#EBA043] text-black"}`}>
+                  {isExpired ? "Expired" : collectedToday ? "All done for today" : "Receive Today's Yield"}
+                </button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {showCollect && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1E1E1E] rounded-[16px] p-5 w-full max-w-[320px]">
+            <div className="text-white font-bold text-center mb-4">Collect {collectItem?.powerLabel} yield?</div>
+            <div className="flex gap-3">
+              <button onClick={()=>setShowCollect(false)} className="flex-1 h-[44px] bg-[#333] text-white rounded">Cancel</button>
+              <button onClick={confirmCollect} className="flex-1 h-[44px] bg-[#EBA043] text-black font-bold rounded">Confirm</button>
+            </div>
           </div>
-        )
-      })}
+        </div>
+      )}
+
+      <BottomNav active="mystake" />
     </div>
   );
 }
