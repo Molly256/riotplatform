@@ -5,10 +5,9 @@ import BottomNav from "@/components/BottomNav";
 const getStableUserId = () => {
   try {
     const u = JSON.parse(localStorage.getItem('riot_user') || '{}');
-    return u.userId || '';
+    return u.userId || u.id || '';
   } catch { return ''; }
 };
-const getOutOfStockKey = (id) => `outOfStock_${id}`; // permanent, not daily
 
 export default function StakingPage() {
   const [active, setActive] = useState("stake");
@@ -16,22 +15,22 @@ export default function StakingPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [selectedItem, setSelectedItem] = useState(null);
-  const [selectedIdx, setSelectedIdx] = useState(null);
-  const [outOfStock, setOutOfStock] = useState([]);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState('');
   const [balance, setBalance] = useState(0);
   const [userId, setUserId] = useState('');
+  const [stakedLabels, setStakedLabels] = useState([]); // PERMANENT SOURCE OF TRUTH
 
   useEffect(() => {
     const uid = getStableUserId();
     setUserId(uid);
     if(!uid) return;
-    const savedStock = JSON.parse(localStorage.getItem(getOutOfStockKey(uid)) || "[]");
-    setOutOfStock(savedStock);
+    
+    // 1. Load balance
     const u = JSON.parse(localStorage.getItem('riot_user') || '{}');
-    if(u.userId){
-      fetch("/api/mine", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId: u.userId }) })
+    setBalance(Number(u.totalBalance || 0));
+    if(u.userId || u.id){
+      fetch("/api/mine", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ userId: uid }) })
         .then(r=>r.json()).then(d=>{
           if(d.success){
             setBalance(Number(d.totals?.totalBalance||d.user?.totalBalance||0));
@@ -39,7 +38,19 @@ export default function StakingPage() {
           }
         }).catch(()=>{})
     }
-    setBalance(Number(u.totalBalance || 0));
+
+    // 2. Load real staked generators from backend - FOREVER OUT OF STOCK
+    fetch("/api/my-stake", { 
+      method:"POST", 
+      headers:{"Content-Type":"application/json"}, 
+      body: JSON.stringify({ userId: uid }) 
+    })
+    .then(r=>r.json()).then(d=>{
+      if(d.success && d.stakes){
+        const labels = d.stakes.map(s=> s.powerLabel || s.power);
+        setStakedLabels(labels);
+      }
+    }).catch(()=>{});
   }, []);
 
   const showToast = (m) => { setToast(m); setTimeout(()=>setToast(''), 3000); }
@@ -60,14 +71,13 @@ export default function StakingPage() {
     { img: "/p13.jpg", power: "40.0MW", stakePower: 5000000,daily: 40000, total: 7200000, period: "180 Days" },
   ];
 
-  const handleStakeClick = (item, idx) => {
-    if (outOfStock.includes(idx)) return;
+  const handleStakeClick = (item) => {
+    if (stakedLabels.includes(item.power)) return; // FOREVER BLOCK
     if (balance < item.stakePower) {
       showToast(`Insufficient Total Balance! Need ${item.stakePower.toLocaleString()} UGX`);
       return;
     }
     setSelectedItem(item);
-    setSelectedIdx(idx);
     setShowConfirm(true);
   };
 
@@ -77,17 +87,16 @@ export default function StakingPage() {
     try {
       const uid = getStableUserId() || userId;
       const storedUser = JSON.parse(localStorage.getItem("riot_user") || "{}");
+      
+      // SECURE: Only send powerLabel, server decides price/daily
       const res = await fetch("/api/stake", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           userId: uid, 
           phone: storedUser.phone, 
-          power: selectedItem.stakePower, 
-          amount: selectedItem.stakePower, 
-          powerLabel: selectedItem.power, 
-          tab,
-          daily: selectedItem.daily // FIX: send daily so Redis saves correct yield
+          powerLabel: selectedItem.power, // ONLY THIS
+          tab
         })
       });
       const data = await res.json();
@@ -98,10 +107,10 @@ export default function StakingPage() {
       const updatedUser = data.user;
       localStorage.setItem("riot_user", JSON.stringify(updatedUser));
       setBalance(Number(updatedUser.totalBalance));
-      // FIX: NO myStakes localStorage anymore - Redis is source of truth
-      const newStock = [...outOfStock, selectedIdx];
-      setOutOfStock(newStock);
-      localStorage.setItem(getOutOfStockKey(uid), JSON.stringify(newStock));
+      
+      // PERMANENT OUT OF STOCK - add to backend list immediately
+      setStakedLabels(prev => [...prev, selectedItem.power]);
+      
       setShowConfirm(false);
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 1800);
@@ -126,7 +135,7 @@ export default function StakingPage() {
       {tab === "daily" && (
         <div className="w-full px-3 flex flex-col gap-4">
           {stakeList.map((item, idx) => {
-            const isOut = outOfStock.includes(idx);
+            const isOut = stakedLabels.includes(item.power);
             return (
               <div key={idx} className="w-full bg-[#181B22] border border-[#EBA043]/40 rounded-[16px] p-3 flex gap-3">
                 <div className="w-[135px] shrink-0">
@@ -144,7 +153,7 @@ export default function StakingPage() {
                       <div className="flex justify-between"><span className="text-white/60 text-[12px]">✨ Total Yield</span><span className="text-white font-semibold text-[12px]">{item.total.toLocaleString()} UGX</span></div>
                     </div>
                   </div>
-                  <button onClick={() => handleStakeClick(item, idx)} disabled={isOut} className={`w-full mt-3 h-[36px] rounded-[10px] font-extrabold text-[13px] ${isOut ? "bg-[#3a3a3a] text-white/60" : "bg-[#EBA043] text-black"}`}>{isOut ? "Out of Stock" : "STAKE POWER"}</button>
+                  <button onClick={() => handleStakeClick(item)} disabled={isOut} className={`w-full mt-3 h-[36px] rounded-[10px] font-extrabold text-[13px] ${isOut ? "bg-[#3a3a3a] text-white/60 cursor-not-allowed" : "bg-[#EBA043] text-black"}`}>{isOut ? "Out of Stock" : "STAKE POWER"}</button>
                 </div>
               </div>
             )

@@ -6,6 +6,8 @@ import { Redis } from '@upstash/redis';
 const redis = Redis.fromEnv();
 const P='rp:';
 
+const getUgDate = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' });
+
 export async function POST(req){
   try{
     const body = await req.json().catch(()=> ({}));
@@ -13,11 +15,20 @@ export async function POST(req){
     const uid = userId || phone;
     if(!uid) return NextResponse.json({success:true, stakes:[]});
     
-    const raw = await redis.lrange(`${P}stakes:${uid}`,0,200);
+    const raw = await redis.lrange(`${P}stakes:${uid}`,0,500);
     const stakes = raw.map(s=>{
-      try{return typeof s==='string'? JSON.parse(s):s}
+      try{
+        const obj = typeof s==='string'? JSON.parse(s):s;
+        // FIX: ensure ugStakedDate exists for old stakes
+        if(!obj.ugStakedDate){
+          obj.ugStakedDate = obj.ugDate || getUgDate();
+        }
+        if(!obj.powerLabel) obj.powerLabel = obj.power;
+        return obj;
+      }
       catch{return null}
-    }).filter(Boolean);
+    }).filter(Boolean)
+    .sort((a,b) => new Date(b.stakedAt||0) - new Date(a.stakedAt||0));
     
     return NextResponse.json({success:true, stakes});
   }catch(e){

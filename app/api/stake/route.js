@@ -6,6 +6,22 @@ import { Redis } from '@upstash/redis';
 const redis = Redis.fromEnv();
 const P = 'rp:';
 
+const SERVER_PRICES = {
+  "1W": { price: 20000, daily: 1000 },
+  "1.5W": { price: 36000, daily: 1500 },
+  "1.7W": { price: 50000, daily: 1700 },
+  "2.5W": { price: 100000, daily: 2500 },
+  "3.0W": { price: 180000, daily: 3000 },
+  "3.5kW": { price: 250000, daily: 3500 },
+  "4.5kW": { price: 350000, daily: 4500 },
+  "5.8kW": { price: 500000, daily: 5800 },
+  "8.0kW": { price: 780000, daily: 8000 },
+  "10.0kW": { price: 980000, daily: 10000 },
+  "14.0MW": { price: 1500000, daily: 14000 },
+  "26.0MW": { price: 3000000, daily: 26000 },
+  "40.0MW": { price: 5000000, daily: 40000 },
+};
+
 const parse = s => { if(typeof s==='object') return s; try{return JSON.parse(s)}catch{return null} }
 const normalizePhone = p => { if(!p) return ''; let s=String(p).replace(/\s/g,''); if(s.startsWith('+256')) s='0'+s.slice(4); if(s.startsWith('256')) s='0'+s.slice(3); return s }
 
@@ -42,13 +58,11 @@ const getUgDMYHM = () => {
   return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 };
 
-// FIXED: MIN RULE
 async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {
   const rates = [0.10, 0.02, 0.01];
   const timeStr = getUgDMYHM();
   const parentId = await redis.get(P + 'parent:' + buyerId) || await redis.get(P + 'user:' + buyerId + ':inviter');
   if (!parentId) return;
-  
   const chain = [];
   let current = String(parentId);
   for (let i = 0; i < 3; i++) {
@@ -57,28 +71,19 @@ async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {
     const nextParent = await redis.get(P + 'parent:' + current) || await redis.get(P + 'user:' + current + ':inviter');
     current = nextParent ? String(nextParent) : null;
   }
-
   for (let i = 0; i < chain.length; i++) {
     const uplineId = chain[i];
     const uplineHasStaked = await redis.get(P + 'stake:first:' + uplineId);
     if (!uplineHasStaked) continue;
-
-    // Calculate upline total stake worth
     const uplineStakesRaw = await redis.lrange(P + 'stakes:' + uplineId, 0, -1);
     let uplineTotal = 0;
     for (const s of uplineStakesRaw) {
-      try {
-        const obj = typeof s === 'string' ? JSON.parse(s) : s;
-        uplineTotal += Number(obj.stakePower || obj.amount || 0);
-      } catch {}
+      try { const obj = typeof s === 'string' ? JSON.parse(s) : s; uplineTotal += Number(obj.stakePower || obj.amount || 0); } catch {}
     }
     if (uplineTotal === 0) continue;
-
-    // MIN RULE: if inviter high, invited low = use low. If inviter low, invited high = use low
     const usableAmount = Math.min(uplineTotal, stakeAmount);
     const reward = Math.floor(usableAmount * rates[i]);
     if (reward <= 0) continue;
-
     const uplineRaw = await redis.get(P + 'user:' + uplineId);
     const uplineUser = uplineRaw ? (typeof uplineRaw==='string'? parse(uplineRaw):uplineRaw) : null
     if (uplineUser) {
@@ -89,7 +94,6 @@ async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {
       await redis.set(P + 'user:' + uplineId, uplineUser);
       try{ await redis.hset(`riot:user:${uplineId}`, { balance: uplineUser.totalBalance, totalBalance: uplineUser.totalBalance, availableBalance: uplineUser.totalBalance }) }catch{}
     }
-
     const commTx = {
       id: `comm_${Date.now()}_${i}_${uplineId}`,
       type: i === 0 ? 'team_a_payout' : i === 1 ? 'team_b_payout' : 'team_c_payout',
@@ -104,7 +108,6 @@ async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {
     };
     await redis.lpush(P + 'tx:' + uplineId, JSON.stringify(commTx));
     await redis.lpush(P + 'tx:history:' + uplineId, JSON.stringify(commTx));
-
     if (i === 0) {
       const upline = await redis.get(P + 'user:' + uplineId);
       const uplineObj = typeof upline==='string'? parse(upline):upline;
@@ -116,11 +119,7 @@ async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {
         uplineObj.turboLifetime = Number((curLife + 2).toFixed(2));
         uplineObj.totalTurboWatts = uplineObj.turboLifetime;
         await redis.set(P + 'user:' + uplineId, uplineObj);
-        await redis.set(P + 'turbocharge:' + uplineId, { 
-          totalPower: uplineObj.totalChargePower, 
-          lifetime: uplineObj.turboLifetime,
-          lastUpdate: Date.now() 
-        });
+        await redis.set(P + 'turbocharge:' + uplineId, { totalPower: uplineObj.totalChargePower, lifetime: uplineObj.turboLifetime, lastUpdate: Date.now() });
       }
       const turboEarn = {
         id: `turbo_earn_${Date.now()}_${uplineId}`,
@@ -141,10 +140,15 @@ async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {
 
 export async function POST(req) {
   try {
-    const { userId, phone, power, amount, powerLabel, tab, daily } = await req.json();
-    const stakeAmount = Number(String(power || amount||'').replace(/,/g,''));
+    const { userId, phone, powerLabel, tab } = await req.json();
+    
+    if (!powerLabel || !SERVER_PRICES[powerLabel]) {
+      return NextResponse.json({ success: false, message: 'Invalid generator' }, { status: 400 });
+    }
+    
+    const { price: stakeAmount, daily: dailyYield } = SERVER_PRICES[powerLabel];
     const query = userId || phone
-    if (!query || !stakeAmount) return NextResponse.json({ success: false, message: 'Missing data' }, { status: 400 });
+    if (!query) return NextResponse.json({ success: false, message: 'Missing data' }, { status: 400 });
 
     const user = await getUserByQuery(query)
     if (!user) return NextResponse.json({ success: false, message: 'User not found '+query }, { status: 404 });
@@ -184,8 +188,7 @@ export async function POST(req) {
     const dateStr = getUgDMYHM();
     const ugDate = getUgDate();
     const stakeId = `stake_${Date.now()}`;
-    const label = powerLabel || String(stakeAmount);
-    const dailyYield = Number(daily) > 0 ? Number(daily) : Math.floor(stakeAmount * 0.05);
+    const label = powerLabel;
 
     const stakeData = {
       id: stakeId,
