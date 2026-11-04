@@ -33,22 +33,7 @@ export default function WithdrawMethod() {
     setTimeout(()=>setToast(false), 3000)
   }
 
-  function getUgandaTime(){
-    const now = new Date()
-    const ugandaStr = now.toLocaleString('en-US', { timeZone: 'Africa/Kampala' })
-    return new Date(ugandaStr)
-  }
-
   async function confirmWithdraw(){
-    const ugTime = getUgandaTime()
-    const day = ugTime.getDay()
-    const hour = ugTime.getHours()
-    const minute = ugTime.getMinutes()
-    const totalMinutes = hour * 60 + minute
-
-    if(day === 0) return triggerToast('No withdrawals on Sunday')
-    if(totalMinutes < 540) return triggerToast('Not time for withdraw - opens at 9:00am')
-    if(totalMinutes > 1080) return triggerToast('Not time for withdraw - closed at 6:00pm')
     if(!amount || Number(amount) < 2000) return triggerToast('Minimum withdraw is 2,000 UGX')
     if(!holderName) return triggerToast('Enter Holders Names')
     if(!walletNumber) return triggerToast('Enter Wallet number')
@@ -71,7 +56,6 @@ export default function WithdrawMethod() {
       const j = await res.json()
       if(!j.success){ triggerToast(j.error); setLoading(false); return; }
 
-      // update local balance
       localStorage.setItem('riot_balance', String(j.newBalance))
       const updatedUser = {...riotUser, totalBalance: j.newBalance, balance: j.newBalance}
       localStorage.setItem('riot_user', JSON.stringify(updatedUser))
@@ -118,8 +102,7 @@ export default function WithdrawMethod() {
         <div className="mt-8">
           <p className="text-[#EBA043] font-black text-[15px] mb-2">Withdraw rules</p>
           <div className="text-[#8A8D98] text-[13px] font-bold leading-6">
-            <p>Withdraw Days: Monday to Saturday.</p>
-            <p>Withdraw Time: 9:00am to 6:00pm</p>
+            <p>Withdraw: 24/7 Available</p>
             <p>Withdraw fee: 10%</p>
             <p>Minimum withdraw amount: 2,000 UGX</p>
           </div>

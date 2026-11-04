@@ -5,13 +5,19 @@ import { Redis } from '@upstash/redis';
 const redis = Redis.fromEnv();
 const P = 'rp:';
 
+// FIXED TIME
+const getUgDate = () => new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Kampala' });
+const getUgTime = () => new Date().toLocaleTimeString('en-GB', { timeZone: 'Africa/Kampala', hour:'2-digit', minute:'2-digit', hour12:false });
+const getUgDateTime = () => `${getUgDate()} ${getUgTime()}`;
+
 export async function POST(req){
   try{
     const { userId, phone, username, amount, walletInput, method } = await req.json();
     if(!userId || !amount) return NextResponse.json({error:'Missing fields'},{status:400});
     
-    const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Kampala' }));
-    const dateStr = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const displayTime = getUgDateTime();
+    const dateOnly = getUgDate();
+    const timeOnly = getUgTime();
     
     const tx = {
       id: `dep_${Date.now()}_${userId}`,
@@ -24,12 +30,16 @@ export async function POST(req){
       username: username || '',
       status: 'pending',
       timestamp: Date.now(),
-      dateStr,
-      date: dateStr,
+      displayTime: displayTime, // 04/11/2025 15:32
+      date: dateOnly, // 04/11/2025
+      time: timeOnly, // 15:32
+      dateStr: displayTime,
+      createdAt: displayTime,
       display: `Deposit pending ${amount} UGX`
     };
     
     await redis.lpush(`${P}tx:${userId}`, JSON.stringify(tx));
+    await redis.lpush(`${P}transactions:${userId}`, JSON.stringify(tx));
     await redis.set(`${P}pending:deposit:${tx.id}`, tx);
     await redis.lpush(`${P}pending:deposits`, tx.id);
     await redis.sadd(`${P}pending:deposits:ids`, tx.id);

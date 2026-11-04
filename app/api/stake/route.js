@@ -53,9 +53,11 @@ async function getUserByQuery(q){
 }
 
 const getUgDate = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' });
+// FIXED TIME ONLY - d/m/yr hr:mins with leading zeros
 const getUgDMYHM = () => {
-  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Kampala' }));
-  return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  const datePart = new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Kampala' });
+  const timePart = new Date().toLocaleTimeString('en-GB', { timeZone: 'Africa/Kampala', hour:'2-digit', minute:'2-digit', hour12:false });
+  return `${datePart} ${timePart}`;
 };
 
 async function processStakeCommissions(buyerId, stakeAmount, buyerPhone) {

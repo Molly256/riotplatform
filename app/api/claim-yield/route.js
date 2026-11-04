@@ -22,15 +22,15 @@ const SERVER_PRICES = {
 };
 
 const parse = s => { if(typeof s==='object') return s; try{return JSON.parse(s)}catch{return null} }
-const getUgDate = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' });
-const getUgDMYHM = () => {
-  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Kampala' }));
-  return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-};
+
+// FIXED TIME - d/m/yr hr:mins
+const getUgDate = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' }); // for comparison YYYY-MM-DD
+const getUgDateGB = () => new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Kampala' }); // 04/11/2025
+const getUgTime = () => new Date().toLocaleTimeString('en-GB', { timeZone: 'Africa/Kampala', hour:'2-digit', minute:'2-digit', hour12:false });
+const getUgDMYHM = () => `${getUgDateGB()} ${getUgTime()}`;
 
 export async function POST(req){
   try{
-    // SECURE: Only stakeId, userId. NO amount, NO power from client
     const { userId, stakeId } = await req.json();
     if(!userId || !stakeId) return NextResponse.json({ success:false, message:'Missing stakeId' }, {status:400});
     
@@ -49,7 +49,6 @@ export async function POST(req){
     const st = stakes[idx];
     const powerLabel = st.powerLabel || st.power;
     
-    // SECURE: daily from server, not from front
     const cfg = SERVER_PRICES[powerLabel];
     if(!cfg) return NextResponse.json({ success:false, message:'Invalid generator' }, {status:400});
     const amt = cfg.daily;
@@ -58,7 +57,6 @@ export async function POST(req){
       return NextResponse.json({ success:false, message:'Already collected today - come back at 00:00 Kampala' }, {status:400});
     }
 
-    // Check expired by date, not only collectedDays
     const calcDay = (() => {
       if(!st.ugStakedDate) return st.collectedDays||0;
       const start = new Date(st.ugStakedDate);
@@ -69,7 +67,6 @@ export async function POST(req){
       return NextResponse.json({ success:false, message:'Generator expired 180/180' }, {status:400});
     }
 
-    // Update stake
     st.collectedDays = (st.collectedDays||0)+1;
     st.lastClaimDate = todayUg;
     st.lastCollected = new Date().toISOString();
@@ -79,16 +76,15 @@ export async function POST(req){
     for(let i=stakes.length-1; i>=0; i--){
       await redis.lpush(stakesKey, JSON.stringify(stakes[i]));
     }
-
-    // Also update single item key if exists
     try{ await redis.set(`${P}stake:item:${stakeId}`, JSON.stringify(st)); }catch{}
 
-    // Balance
     user.balance = Number(user.balance||0)+amt;
     user.availableBalance = Number(user.availableBalance||0)+amt;
     user.totalBalance = Number(user.totalBalance||0)+amt;
     await redis.set(P+'user:'+user.userId, user);
 
+    // FIXED TX - d/m/yr hr:mins
+    const displayTime = getUgDMYHM();
     const tx = {
       id: `yield_${Date.now()}`,
       type: 'stake_yield',
@@ -98,13 +94,19 @@ export async function POST(req){
       stakeId,
       amount: amt,
       status: 'success',
-      date: getUgDMYHM(),
+      displayTime: displayTime, // 04/11/2025 15:32
+      date: getUgDateGB(), // 04/11/2025
+      time: getUgTime(), // 15:32
+      dateStr: displayTime,
+      createdAt: displayTime,
       ugandaDate: todayUg,
+      isoDate: todayUg,
       display: `Yield ${powerLabel} +${amt.toLocaleString()} UGX`,
       timestamp: Date.now(),
       userId: user.userId,
     };
     await redis.lpush(P+'tx:'+user.userId, JSON.stringify(tx));
+    await redis.lpush(P+'transactions:'+user.userId, JSON.stringify(tx));
 
     return NextResponse.json({ success:true, user, tx, daily: amt });
   }catch(e){ 

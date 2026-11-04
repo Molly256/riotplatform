@@ -8,7 +8,7 @@ const P = 'rp:';
 const parse = s => { if(typeof s==='object') return s; try{return JSON.parse(s)}catch{return null} }
 const normalizePhone = p => { if(!p) return ''; let s=String(p).replace(/\s/g,''); if(s.startsWith('+256')) s='0'+s.slice(4); if(s.startsWith('256')) s='0'+s.slice(3); return s }
 
-async function getUserByQuery(q){
+async function getUserByQueryFast(q){
   if(!q) return null
   const raw = String(q).trim()
   const low = raw.toLowerCase()
@@ -19,20 +19,23 @@ async function getUserByQuery(q){
     const exists = await redis.exists(`${P}user:${raw}`)
     if(exists) userId = raw
   }
-  if(!userId){
-    const all = await redis.smembers(`${P}all_users`)
-    for(const id of all.slice(0,400)){
-      const u = await redis.get(`${P}user:${id}`)
-      if(!u) continue
-      const uObj = typeof u==='string'? parse(u):u
-      if(!uObj) continue
-      if(String(uObj.phone||'').includes(raw) || normalizePhone(uObj.phone||'').includes(normalizePhone(raw)) || String(uObj.userId||'').toLowerCase()===low) return uObj
-    }
-    return null
+  if(userId){
+    const u = await redis.get(`${P}user:${userId}`)
+    if(u) return typeof u==='string'? parse(u):u
   }
-  const u = await redis.get(`${P}user:${userId}`)
-  if(!u) return null
-  return typeof u==='string'? parse(u):u
+  // fallback only if fast path fails - pipeline fast
+  const all = await redis.smembers(`${P}all_users`)
+  const slice = all.slice(0,150)
+  if(slice.length===0) return null
+  const pipe = redis.pipeline()
+  slice.forEach(id=> pipe.get(`${P}user:${id}`))
+  const results = await pipe.exec()
+  for(const r of results){
+    const uObj = typeof r==='string'? parse(r):r
+    if(!uObj) continue
+    if(String(uObj.phone||'').includes(raw) || normalizePhone(uObj.phone||'').includes(normalizePhone(raw)) || String(uObj.userId||'').toLowerCase()===low) return uObj
+  }
+  return null
 }
 
 const getUgToday = () => {
@@ -46,11 +49,11 @@ export async function POST(req){
     const { userId, phone } = await req.json();
     const query = userId || phone
     if(!query) return NextResponse.json({success:false},{status:400});
-
-    const user = await getUserByQuery(query);
+    const user = await getUserByQueryFast(query);
     if(!user) return NextResponse.json({success:false, message:'User not found '+query},{status:404});
 
-    const txList = await redis.lrange(`${P}tx:${user.userId}`,0,-1);
+    // FAST: 0,500 not 0,-1 - same result for you since <500 txs
+    const txList = await redis.lrange(`${P}tx:${user.userId}`,0,500);
     const txs = txList.map(s=>{ try{ return typeof s==='string'?JSON.parse(s):s }catch{ return null }}).filter(Boolean);
 
     const todayStr = getUgToday();
@@ -116,15 +119,12 @@ export async function POST(req){
       totalTurboWattsEarned = dbTurboPower + totalTurboExchangeUGX/1000;
     }
 
-    // FIXED: balance = income - stake - withdraw
     const sumIncome = totalPowerDeposited + totalStakeYield + totalTeamCommission + totalTurboExchangeUGX + 1000
     const correctBalance = Math.max(0, sumIncome - totalStake - totalWithdraw)
     
     let totalBalance = Number(user.totalBalance||user.balance||0)
     
-    // Auto-repair: if stored balance is wrong, fix to correct
     if(Math.abs(totalBalance - correctBalance) > 0.5){
-      // For old users where stored balance never included yields, or after stake it was added back
       if(totalBalance < sumIncome || totalBalance > correctBalance){
         totalBalance = correctBalance
         user.totalBalance = totalBalance
@@ -154,7 +154,7 @@ export async function POST(req){
         availableBalance: totalBalance,
         balance: totalBalance
       }
-    });
+    }, { headers: { 'Cache-Control': 'no-store' } });
 
   }catch(e){
     console.error(e);

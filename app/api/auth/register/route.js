@@ -22,6 +22,11 @@ async function isVPN(ip) {
   } catch { return false; }
 }
 
+// FIXED TIME HELPERS - d/m/yr hr:mins Kampala
+const getUgDate = () => new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Kampala' });
+const getUgTime = () => new Date().toLocaleTimeString('en-GB', { timeZone: 'Africa/Kampala', hour:'2-digit', minute:'2-digit', hour12:false });
+const getUgDateTime = () => `${getUgDate()} ${getUgTime()}`;
+
 export async function POST(req) {
   try {
     const { phone, username, email, password, inviterCode } = await req.json();
@@ -71,8 +76,9 @@ export async function POST(req) {
       tries++;
     } while (await redis.exists(`rp:invite:${inviteCodeNew}`) && tries < 10);
 
-    const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Kampala' }));
-    const dateStr = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const displayTime = getUgDateTime();
+    const dateOnly = getUgDate();
+    const timeOnly = getUgTime();
 
     const user = {
       phone,
@@ -92,7 +98,9 @@ export async function POST(req) {
       totalTurboWatts: 0,
       ip,
       createdAt: Date.now(),
-      createdAtStr: dateStr
+      createdAtStr: displayTime,
+      createdAtDate: dateOnly,
+      createdAtTime: timeOnly
     };
 
     await redis.set(`rp:user:${userId}`, user);
@@ -108,6 +116,7 @@ export async function POST(req) {
       await redis.set(`rp:phone:${phone}:ip`, ip);
     }
 
+    // FIXED TX WITH d/m/yr hr:mins
     const tx = {
       id: `reg_${Date.now()}`,
       type: "registration_reward",
@@ -116,8 +125,11 @@ export async function POST(req) {
       display: "Registration reward success 1000shs",
       status: "success",
       timestamp: Date.now(),
-      dateStr: dateStr,
-      date: dateStr
+      displayTime: displayTime, // 04/11/2025 15:32
+      date: dateOnly, // 04/11/2025
+      time: timeOnly, // 15:32
+      dateStr: displayTime,
+      createdAt: displayTime
     };
     await redis.lpush(`rp:tx:${userId}`, JSON.stringify(tx));
     await redis.lpush(`rp:tx:history:${phone}`, JSON.stringify(tx));
@@ -139,7 +151,6 @@ export async function POST(req) {
       }
     }
 
-    // FIXED TURBO - correct keys + correct shape
     const turboKey = `rp:turbocharge:${inviterUserId}`;
     let turboData = await redis.get(turboKey);
     if (!turboData) turboData = { totalPower: 0, members: 0, lifetime: 0 };
@@ -150,7 +161,6 @@ export async function POST(req) {
     turboData.lastUpdate = Date.now();
     await redis.set(turboKey, turboData);
 
-    // update inviter user totals
     const inviter = await redis.get(`rp:user:${inviterUserId}`);
     if(inviter){
       inviter.totalChargePower = turboData.totalPower;
@@ -160,24 +170,24 @@ export async function POST(req) {
       await redis.set(`rp:user:${inviterUserId}`, inviter);
     }
 
-    // FIXED TX SHAPE - this is what TurbochargePage expects
     const turboTx = {
       id: `turbo_inv_${Date.now()}_${userId}`,
       type: "invite",
       watts: 0.25,
-      from: phone, // FIX: was missing → caused undefined
+      from: phone,
       display: `Received 0.25W from ${phone}`,
       amount: 0.25,
       power: 0.25,
       status: "success",
       timestamp: Date.now(),
-      date: dateStr,
-      dateStr: dateStr,
-      createdAt: dateStr,
+      displayTime: displayTime,
+      date: dateOnly,
+      time: timeOnly,
+      dateStr: displayTime,
+      createdAt: displayTime,
       note: `0.25W from ${phone} registration`
     };
 
-    // SAVE TO ALL KEYS THAT GET READS
     await redis.lpush(`rp:turbo:${inviterUserId}:earn_history`, JSON.stringify(turboTx));
     await redis.lpush(`rp:turbo:${inviterUserId}:history`, JSON.stringify(turboTx));
     await redis.lpush(`rp:tx:${inviterUserId}:history`, JSON.stringify(turboTx));

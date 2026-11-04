@@ -6,21 +6,20 @@ const redis = Redis.fromEnv();
 const P = 'rp:';
 
 const getUgDMYHM = () => {
-  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Kampala' }));
-  return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  const datePart = new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Kampala' });
+  const timePart = new Date().toLocaleTimeString('en-GB', { timeZone: 'Africa/Kampala', hour:'2-digit', minute:'2-digit', hour12:false });
+  return `${datePart} ${timePart}`;
 };
 
 const normalizeEarn = (raw) => {
   try{
     const o = typeof raw === 'string' ? JSON.parse(raw) : raw;
     if(!o) return null;
-    // fix old broken items that have undefined
     const watts = Number(o.watts ?? o.bonus ?? o.power ?? o.amount ?? o.W ?? o.w ?? 0.25);
     if(!watts || isNaN(watts)) return null;
     const from = o.from || o.fromUser || o.invitee || o.inviteePhone || o.phone || o.username || o.userId || o.inviteeId || "friend";
     const date = o.date || o.createdAt || o.timestamp || o.fullDate || o.dateStr || new Date().toISOString();
     const type = o.type || (watts >= 2 ? 'first_stake' : 'invite');
-    // skip undefined display
     let display = o.display;
     if(!display || display.includes('undefined')){
       display = type === 'first_stake' || watts >= 2 
@@ -40,7 +39,6 @@ export async function GET(req){
     const turbo = await redis.get(`${P}turbocharge:${userId}`);
     const user = await redis.get(`${P}user:${userId}`);
     
-    // Available = goes to 0 after exchange
     const available = Number(turbo?.totalPower ?? user?.totalChargePower ?? user?.turboAvailable ?? 0);
     
     let earnHistory = [];
@@ -53,19 +51,14 @@ export async function GET(req){
       }
     }catch{}
 
-    // FIX: lifetime = actual sum of history, not broken user field
     const sumEarned = earnHistory.reduce((s, r) => s + Number(r.watts||0), 0);
-    // lifetime is total ever earned (adds new to old, never resets)
     const lifetime = Number(user?.turboLifetime ?? user?.totalTurboWatts ?? turbo?.lifetime ?? sumEarned ?? 0);
-    // if user field is 0 but history shows 0.25, use history
     const finalLifetime = lifetime > 0 ? lifetime : sumEarned;
     const finalAvailable = available > 0 ? available : (sumEarned - Number(user?.turboExchangedTotal||0) > 0 ? sumEarned - Number(user?.turboExchangedTotal||0) : available);
 
-    // Repair: if available is 0 but history says 0.25 and never exchanged, restore available
     let correctedAvailable = available;
     if(earnHistory.length > 0 && available === 0 && Number(user?.turboExchangedTotal||0) === 0){
       correctedAvailable = sumEarned;
-      // save fix
       try{
         await redis.set(`${P}turbocharge:${userId}`, { totalPower: correctedAvailable, lifetime: finalLifetime, lastUpdate: Date.now() });
         if(user){

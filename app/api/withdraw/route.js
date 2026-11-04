@@ -5,6 +5,12 @@ import { Redis } from '@upstash/redis';
 const redis = Redis.fromEnv();
 const P = 'rp:';
 
+const getUgDMYHM = () => {
+  const datePart = new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Kampala' });
+  const timePart = new Date().toLocaleTimeString('en-GB', { timeZone: 'Africa/Kampala', hour:'2-digit', minute:'2-digit', hour12:false });
+  return `${datePart} ${timePart}`;
+};
+
 export async function POST(req){
   try{
     const { userId, phone, username, amount, holderName, walletNumber, method, fee, receive } = await req.json();
@@ -16,8 +22,7 @@ export async function POST(req){
       return NextResponse.json({error:'Insufficient balance'},{status:400});
     }
 
-    const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Kampala' }));
-    const dateStr = `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+    const dateStr = getUgDMYHM();
     
     const feeCalc = Math.floor(Number(amount)*0.1);
     const receiveCalc = Number(amount) - feeCalc;
@@ -42,7 +47,6 @@ export async function POST(req){
       display: `Withdraw pending ${receiveCalc} UGX`
     };
 
-    // Deduct immediately
     const newBal = Number(user.totalBalance || 0) - Number(amount);
     user.totalBalance = newBal;
     user.balance = newBal;

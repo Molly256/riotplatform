@@ -2,37 +2,50 @@ export const runtime='nodejs';
 export const dynamic='force-dynamic';
 import { NextResponse } from 'next/server';
 import { Redis } from '@upstash/redis';
-
 const redis = Redis.fromEnv();
-const P='rp:';
+const P = 'rp:';
 
-const getUgDate = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' });
+// FIXED TIME
+const getUgDate = () => new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Kampala' });
+const getUgTime = () => new Date().toLocaleTimeString('en-GB', { timeZone: 'Africa/Kampala', hour:'2-digit', minute:'2-digit', hour12:false });
+const getUgDateTime = () => `${getUgDate()} ${getUgTime()}`;
 
 export async function POST(req){
   try{
-    const body = await req.json().catch(()=> ({}));
-    const { userId, phone } = body;
-    const uid = userId || phone;
-    if(!uid) return NextResponse.json({success:true, stakes:[]});
+    const { userId, phone, username, amount, walletInput, method } = await req.json();
+    if(!userId || !amount) return NextResponse.json({error:'Missing fields'},{status:400});
     
-    const raw = await redis.lrange(`${P}stakes:${uid}`,0,500);
-    const stakes = raw.map(s=>{
-      try{
-        const obj = typeof s==='string'? JSON.parse(s):s;
-        // FIX: ensure ugStakedDate exists for old stakes
-        if(!obj.ugStakedDate){
-          obj.ugStakedDate = obj.ugDate || getUgDate();
-        }
-        if(!obj.powerLabel) obj.powerLabel = obj.power;
-        return obj;
-      }
-      catch{return null}
-    }).filter(Boolean)
-    .sort((a,b) => new Date(b.stakedAt||0) - new Date(a.stakedAt||0));
+    const displayTime = getUgDateTime();
+    const dateOnly = getUgDate();
+    const timeOnly = getUgTime();
     
-    return NextResponse.json({success:true, stakes});
+    const tx = {
+      id: `dep_${Date.now()}_${userId}`,
+      type: 'deposit',
+      method: method || 'MTN',
+      amount: Number(amount),
+      wallet: walletInput,
+      userId,
+      phone: phone || '',
+      username: username || '',
+      status: 'pending',
+      timestamp: Date.now(),
+      displayTime: displayTime, // 04/11/2025 15:32
+      date: dateOnly, // 04/11/2025
+      time: timeOnly, // 15:32
+      dateStr: displayTime,
+      createdAt: displayTime,
+      display: `Deposit pending ${amount} UGX`
+    };
+    
+    await redis.lpush(`${P}tx:${userId}`, JSON.stringify(tx));
+    await redis.lpush(`${P}transactions:${userId}`, JSON.stringify(tx));
+    await redis.set(`${P}pending:deposit:${tx.id}`, tx);
+    await redis.lpush(`${P}pending:deposits`, tx.id);
+    await redis.sadd(`${P}pending:deposits:ids`, tx.id);
+    
+    return NextResponse.json({success:true, tx});
   }catch(e){
-    console.error("my-stake fail", e);
-    return NextResponse.json({success:true, stakes:[]});
+    return NextResponse.json({error:e.message},{status:500});
   }
 }

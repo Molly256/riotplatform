@@ -89,7 +89,7 @@ export default function SupportWidget() {
           <div className="bg-[#141414] p-4 flex flex-col gap-3 overflow-y-auto">
             <div className="bg-[#1A1C24] rounded-xl p-3 border border-gray-800">
               <p className="text-[11px] font-bold text-[#EBA043] mb-2">✈️ Telegram Support</p>
-              <a href="https://t.me/Aliciia580" target="_blank" className="flex items-center gap-2 bg-[#229ED9] text-white px-3 py-2.5 rounded-lg font-bold text-[13px]">
+              <a href="https://t.me/Riotplatfom" target="_blank" className="flex items-center gap-2 bg-[#229ED9] text-white px-3 py-2.5 rounded-lg font-bold text-[13px]">
                 <span className="bg-white rounded-full w-6 h-6 flex items-center justify-center text-[#229ED9]">✈</span>
                 @Aliciia580
               </a>
@@ -98,11 +98,11 @@ export default function SupportWidget() {
             <div className="bg-[#1A1C24] rounded-xl p-3 border border-gray-800">
               <p className="text-[11px] font-bold text-[#EBA043] mb-2">💬 WhatsApp Support</p>
               <div className="flex flex-col gap-2">
-                <a href="https://wa.me/17747348569" target="_blank" className="flex items-center gap-2 bg-[#25D366] text-white px-3 py-2.5 rounded-lg font-bold text-[13px]">
-                  🟢 +1 774 734 8569
+                <a href="https://wa.me/447520643574" target="_blank" className="flex items-center gap-2 bg-[#25D366] text-white px-3 py-2.5 rounded-lg font-bold text-[13px]">
+                  🟢 +447520643574
                 </a>
-                <a href="https://wa.me/17747300895" target="_blank" className="flex items-center gap-2 bg-[#25D366] text-white px-3 py-2.5 rounded-lg font-bold text-[13px]">
-                  🟢 +1 774 730 0895
+                <a href="https://wa.me/447520643712" target="_blank" className="flex items-center gap-2 bg-[#25D366] text-white px-3 py-2.5 rounded-lg font-bold text-[13px]">
+                  🟢 +447520643712
                 </a>
               </div>
             </div>

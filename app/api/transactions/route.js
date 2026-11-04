@@ -10,10 +10,7 @@ export async function POST(req){
     const {userId}=await req.json();
     if(!userId) return NextResponse.json({success:false, txs:[]}, {status:400});
     
-    // Main source - you use this in deposit, withdraw, stake, yield, commission, turbo
     const raw = await redis.lrange(`${P}tx:${userId}`,0,-1);
-    
-    // Also pull legacy keys if exist (some old tx are there)
     const raw2 = await redis.lrange(`${P}tx:history:${userId}`,0,-1).catch(()=>[]);
     const raw3 = await redis.lrange(`${P}transactions:${userId}`,0,-1).catch(()=>[]);
     
@@ -24,22 +21,26 @@ export async function POST(req){
       try{
         const obj = typeof r==='string'?JSON.parse(r):r;
         if(!obj || !obj.id) continue;
-        // dedupe by id, keep newest
         if(!txsMap.has(obj.id)) txsMap.set(obj.id, obj);
       }catch{ continue }
     }
     
     let txs = Array.from(txsMap.values());
-    
-    // Sort by timestamp DESC (newest first)
     txs.sort((a,b)=> Number(b.timestamp||0) - Number(a.timestamp||0));
     
-    // Normalize types for frontend tabs
+    // FIXED TIME ONLY - normalize d/m/yr hr:mins
     txs = txs.map(t=>{
-      // Ensure status capitalized for display
       if(!t.status) t.status = 'success';
-      // Ensure dateStr exists
-      if(!t.dateStr && t.date) t.dateStr = t.date;
+      // Ensure displayTime is used - d/m/yr hr:mins
+      const time = t.displayTime || t.dateStr || t.createdAt || t.date || '';
+      if(!t.displayTime) t.displayTime = time;
+      if(!t.dateStr) t.dateStr = time;
+      if(!t.date) t.date = time;
+      // Keep time field if exists, else extract from displayTime
+      if(!t.time && time && time.includes(' ')){
+        const parts = time.split(' ');
+        if(parts[1] && parts[1].includes(':')) t.time = parts[1];
+      }
       return t;
     });
     

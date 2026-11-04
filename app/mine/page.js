@@ -35,10 +35,32 @@ export default function MinePage() {
     const av = localStorage.getItem("riot_avatar");
     if (av) setAvatar(av);
 
+    // FIXED: CACHE ALL FIELDS INSTANTLY - NO 0
+    const safeLocal = (v)=> Number(String(v||0).replace(/,/g,'')) || 0;
+    try{
+      const cachedTotals = JSON.parse(localStorage.getItem("riot_totals") || "null");
+      if(cachedTotals){
+        setBalances({
+          totalBalance: safeLocal(cachedTotals.totalBalance || localStorage.getItem("totalBalance") || saved?.totalBalance),
+          totalPowerDeposited: safeLocal(cachedTotals.totalPowerDeposited),
+          totalWithdraw: safeLocal(cachedTotals.totalWithdraw),
+          todaysYield: safeLocal(cachedTotals.todaysYield),
+          totalStake: safeLocal(cachedTotals.totalStake),
+          totalTeamCommission: safeLocal(cachedTotals.totalTeamCommission),
+          totalStakeYield: safeLocal(cachedTotals.totalStakeYield),
+          totalTurbochargeWatts: safeLocal(cachedTotals.totalTurbochargeWatts || cachedTotals.totalChargePower),
+          totalTurbochargeUGX: safeLocal(cachedTotals.totalTurbochargeUGX || cachedTotals.totalTurboExchangeUGX),
+          totalTurboWattsEarned: safeLocal(cachedTotals.totalTurboWattsEarned),
+        });
+      } else {
+        const cachedBal = safeLocal(localStorage.getItem("totalBalance") || saved?.totalBalance || saved?.balance || 0);
+        if(cachedBal>0) setBalances(prev=>({...prev, totalBalance: cachedBal}));
+      }
+    }catch{}
+
     const q = saved?.userId || saved?.id || localStorage.getItem("userId") || localStorage.getItem("rp_userId") || saved?.phone || "";
     if (!q) return;
 
-    // SINGLE SOURCE OF TRUTH - /api/mine POST (rp:tx + rp:user)
     fetch("/api/mine", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -51,9 +73,8 @@ export default function MinePage() {
         const u = d.user || {};
         const t = d.totals || {};
         const safe = (v)=> Number(String(v||0).replace(/,/g,'')) || 0;
-        // DB totalBalance is king - never go back to 1000 if DB says 2000
         const realBalance = safe(t.totalBalance ?? u.totalBalance ?? u.balance ?? 0);
-        setBalances({
+        const newBalances = {
           totalBalance: realBalance,
           totalPowerDeposited: safe(t.totalPowerDeposited),
           totalWithdraw: safe(t.totalWithdraw),
@@ -64,9 +85,11 @@ export default function MinePage() {
           totalTurbochargeWatts: safe(t.totalChargePower ?? t.totalTurbochargeWatts),
           totalTurbochargeUGX: safe(t.totalTurbochargeUGX),
           totalTurboWattsEarned: safe(t.totalTurboWattsEarned ?? t.totalChargePower)
-        });
-        // sync localStorage FORWARD only (DB -> LS), never LS -> DB
+        };
+        setBalances(newBalances);
+        // CACHE FOR NEXT INSTANT OPEN
         localStorage.setItem("totalBalance", String(realBalance));
+        localStorage.setItem("riot_totals", JSON.stringify(newBalances));
         const merged = { ...saved, ...u, totalBalance: realBalance, balance: realBalance };
         localStorage.setItem("riot_user", JSON.stringify(merged));
         localStorage.setItem("currentUser", JSON.stringify(merged));
@@ -120,6 +143,7 @@ export default function MinePage() {
 
   const handleLogout = ()=>{
     localStorage.removeItem("currentUser"); localStorage.removeItem("user"); localStorage.removeItem("userId"); localStorage.removeItem("inviteCode");
+    localStorage.removeItem("riot_totals");
     router.push("/login");
   };
 
@@ -154,7 +178,6 @@ export default function MinePage() {
         <div className="mt-6 grid grid-cols-2 gap-3">
           {items.map((it,i)=>(<div key={i} className="h-[88px] rounded-[15px] bg-gradient-to-br from-[#EBA043] to-[#F7C978] flex flex-col items-center justify-center px-1"><p className="text-[12px] font-bold text-black text-center">{it.label}</p><p className="mt-1 text-[22px] font-black text-black">{it.value}</p>{it.sub&&<p className="text-[10px] font-bold text-black/60">{it.sub}</p>}</div>))}
         </div>
-
         <div className="mt-8">
           <h3 className="text-[#EBA043] text-[18px] font-black mb-3">Credential Modification</h3>
           <div className="flex flex-col gap-3">
@@ -164,7 +187,6 @@ export default function MinePage() {
             <button onClick={handleSaveCredentials} className="h-[50px] w-full rounded-[12px] bg-[#EBA043] text-black font-black text-[15px]">Save credentials</button>
           </div>
         </div>
-
         <div className="mt-6">
           <button onClick={()=>setShowLangs(!showLangs)} className="h-[50px] w-full rounded-[12px] bg-[#EBA043] text-black font-black text-[15px]">🌐 Change language</button>
           {showLangs && (
@@ -178,12 +200,10 @@ export default function MinePage() {
             </div>
           )}
         </div>
-
         <div className="mt-4">
           <button onClick={()=>setShowLogout(true)} className="h-[50px] w-full rounded-[12px] bg-[#EBA043] text-black font-black text-[15px]">🚪 Logout</button>
         </div>
       </div>
-
       {showLogout && (
         <div className="fixed inset-0 bg-black/70 z-[1000] flex items-center justify-center p-4">
           <div className="w-full max-w-[320px] bg-[#1A1E2A] rounded-[18px] p-5 border border-white/10">
