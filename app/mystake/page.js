@@ -28,15 +28,29 @@ export default function MyStakePage() {
     try { const u = JSON.parse(localStorage.getItem('riot_user') || '{}'); return u.userId || u.id || u.phone || ''; } catch { return ''; }
   };
   const getUgDateStr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' });
+  const getUgDateGB = () => new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Kampala' });
 
   const calcDayCount = (ugStakedDate) => {
     if(!ugStakedDate) return 0;
     try {
-      const start = new Date(ugStakedDate);
-      const today = new Date(getUgDateStr());
-      const diff = Math.floor((today - start) / 86400000);
+      const parts = ugStakedDate.split('-');
+      if(parts.length !== 3) return 0;
+      const [y,m,d] = parts.map(Number);
+      const startUTC = Date.UTC(y, m-1, d);
+      const todayStr = getUgDateStr();
+      const [ty,tm,td] = todayStr.split('-').map(Number);
+      const todayUTC = Date.UTC(ty, tm-1, td);
+      const diff = Math.floor((todayUTC - startUTC) / 86400000);
       return Math.min(Math.max(diff, 0), 180);
     } catch { return 0; }
+  };
+
+  const hasCollectedToday = (item) => {
+    if(!item?.lastClaimDate) return false;
+    const todayCA = getUgDateStr();
+    const todayGB = getUgDateGB();
+    const last = String(item.lastClaimDate);
+    return last === todayCA || last === todayGB || last.includes(todayCA) || last.includes(todayGB);
   };
 
   const loadStakes = async () => {
@@ -58,8 +72,6 @@ export default function MyStakePage() {
 
   useEffect(() => { loadStakes(); const i = setInterval(() => loadStakes(), 60000); return () => clearInterval(i); }, []);
   
-  const hasCollectedToday = (item) => item?.lastClaimDate === getUgDateStr();
-
   const handleReceiveClick = (item) => {
     if (calcDayCount(item.ugStakedDate) >= 180) return;
     if (hasCollectedToday(item)) return;
@@ -106,7 +118,7 @@ export default function MyStakePage() {
               <img src={real.img} alt="" className="w-[70px] h-[70px] rounded object-cover bg-[#222]" />
               <div className="flex-1 flex flex-col gap-1">
                 <div className="text-white font-bold text-[13px]">{item.powerLabel || item.power} Generator</div>
-                <div className="text-white/60 text-[11px]">Daily: {real.daily?.toLocaleString()} UGX</div>
+                <div className="text-white/60 text-[11px]">Daily: {(item.daily || real.daily || 0).toLocaleString()} UGX</div>
                 <div className="flex items-center justify-between mt-1">
                   <span className="text-[#EBA043] font-extrabold text-[11px]">{dayCount}/180</span>
                   <span className="text-white/40 text-[10px]">{item.ugStakedDate || ""}</span>

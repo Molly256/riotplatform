@@ -2,50 +2,59 @@ export const runtime='nodejs';
 export const dynamic='force-dynamic';
 import { NextResponse } from 'next/server';
 import { Redis } from '@upstash/redis';
+
 const redis = Redis.fromEnv();
 const P = 'rp:';
 
-// FIXED TIME
-const getUgDate = () => new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Kampala' });
-const getUgTime = () => new Date().toLocaleTimeString('en-GB', { timeZone: 'Africa/Kampala', hour:'2-digit', minute:'2-digit', hour12:false });
-const getUgDateTime = () => `${getUgDate()} ${getUgTime()}`;
+const parse = s => { if(typeof s==='object') return s; try{return JSON.parse(s)}catch{return null} }
+const normalizePhone = p => { if(!p) return ''; let s=String(p).replace(/\s/g,''); if(s.startsWith('+256')) s='0'+s.slice(4); if(s.startsWith('256')) s='0'+s.slice(3); return s }
+
+async function getUserByQuery(q){
+  if(!q) return null
+  const raw = String(q).trim()
+  const low = raw.toLowerCase()
+  let userId = await redis.get(`${P}phone:${raw}`)
+  if(!userId) userId = await redis.get(`${P}phone:${normalizePhone(raw)}`)
+  if(!userId) userId = await redis.get(`${P}username:${low}`)
+  if(!userId){
+    const exists = await redis.exists(`${P}user:${raw}`)
+    if(exists) userId = raw
+  }
+  if(!userId){
+    const all = await redis.smembers(`${P}all_users`)
+    for(const id of all.slice(0,500)){
+      const u = await redis.get(`${P}user:${id}`)
+      if(!u) continue
+      const uObj = typeof u==='string'? parse(u):u
+      if(!uObj) continue
+      if(String(uObj.phone||'').includes(raw) || normalizePhone(uObj.phone||'').includes(normalizePhone(raw))) return uObj
+    }
+    return null
+  }
+  const u = await redis.get(`${P}user:${userId}`)
+  if(!u) return null
+  return typeof u==='string'? parse(u):u
+}
 
 export async function POST(req){
   try{
-    const { userId, phone, username, amount, walletInput, method } = await req.json();
-    if(!userId || !amount) return NextResponse.json({error:'Missing fields'},{status:400});
+    const { userId, phone } = await req.json().catch(()=>({}));
+    const query = userId || phone;
+    if(!query) return NextResponse.json({success:true, stakes:[]});
+
+    const user = await getUserByQuery(query);
+    if(!user) return NextResponse.json({success:true, stakes:[]});
+
+    const uid = user.userId;
+    const raw = await redis.lrange(`${P}stakes:${uid}`, 0, -1);
     
-    const displayTime = getUgDateTime();
-    const dateOnly = getUgDate();
-    const timeOnly = getUgTime();
-    
-    const tx = {
-      id: `dep_${Date.now()}_${userId}`,
-      type: 'deposit',
-      method: method || 'MTN',
-      amount: Number(amount),
-      wallet: walletInput,
-      userId,
-      phone: phone || '',
-      username: username || '',
-      status: 'pending',
-      timestamp: Date.now(),
-      displayTime: displayTime, // 04/11/2025 15:32
-      date: dateOnly, // 04/11/2025
-      time: timeOnly, // 15:32
-      dateStr: displayTime,
-      createdAt: displayTime,
-      display: `Deposit pending ${amount} UGX`
-    };
-    
-    await redis.lpush(`${P}tx:${userId}`, JSON.stringify(tx));
-    await redis.lpush(`${P}transactions:${userId}`, JSON.stringify(tx));
-    await redis.set(`${P}pending:deposit:${tx.id}`, tx);
-    await redis.lpush(`${P}pending:deposits`, tx.id);
-    await redis.sadd(`${P}pending:deposits:ids`, tx.id);
-    
-    return NextResponse.json({success:true, tx});
+    const stakes = raw.map(s => {
+      try { return typeof s === 'string' ? JSON.parse(s) : s; } 
+      catch { return null; }
+    }).filter(Boolean);
+
+    return NextResponse.json({success:true, stakes}, {headers:{'Cache-Control':'no-store'}});
   }catch(e){
-    return NextResponse.json({error:e.message},{status:500});
+    return NextResponse.json({success:false, stakes:[], error:e.message},{status:500});
   }
 }

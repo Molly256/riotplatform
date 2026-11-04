@@ -22,10 +22,27 @@ const SERVER_PRICES = {
 };
 
 const parse = s => { if(typeof s==='object') return s; try{return JSON.parse(s)}catch{return null} }
+const normalizePhone = p => { if(!p) return ''; let s=String(p).replace(/\s/g,''); if(s.startsWith('+256')) s='0'+s.slice(4); if(s.startsWith('256')) s='0'+s.slice(3); return s }
 
-// FIXED TIME - d/m/yr hr:mins
-const getUgDate = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' }); // for comparison YYYY-MM-DD
-const getUgDateGB = () => new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Kampala' }); // 04/11/2025
+async function getUserByQuery(q){
+  if(!q) return null
+  const raw = String(q).trim()
+  const low = raw.toLowerCase()
+  let userId = await redis.get(`${P}phone:${raw}`)
+  if(!userId) userId = await redis.get(`${P}phone:${normalizePhone(raw)}`)
+  if(!userId) userId = await redis.get(`${P}username:${low}`)
+  if(!userId){
+    const exists = await redis.exists(`${P}user:${raw}`)
+    if(exists) userId = raw
+  }
+  if(!userId) return null
+  const u = await redis.get(`${P}user:${userId}`)
+  if(!u) return null
+  return typeof u==='string'? parse(u):u
+}
+
+const getUgDateCA = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' });
+const getUgDateGB = () => new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Kampala' });
 const getUgTime = () => new Date().toLocaleTimeString('en-GB', { timeZone: 'Africa/Kampala', hour:'2-digit', minute:'2-digit', hour12:false });
 const getUgDMYHM = () => `${getUgDateGB()} ${getUgTime()}`;
 
@@ -34,11 +51,11 @@ export async function POST(req){
     const { userId, stakeId } = await req.json();
     if(!userId || !stakeId) return NextResponse.json({ success:false, message:'Missing stakeId' }, {status:400});
     
-    const userRaw = await redis.get(`${P}user:${userId}`);
-    if(!userRaw) return NextResponse.json({ success:false, message:'User not found' }, {status:404});
-    const user = typeof userRaw === 'string' ? parse(userRaw) : userRaw;
+    const user = await getUserByQuery(userId);
+    if(!user) return NextResponse.json({ success:false, message:'User not found' }, {status:404});
 
-    const todayUg = getUgDate();
+    const todayCA = getUgDateCA();
+    const todayGB = getUgDateGB();
     const stakesKey = P+'stakes:'+user.userId;
     const stakesRaw = await redis.lrange(stakesKey, 0, 500);
     let stakes = stakesRaw.map(s => typeof s==='string'? parse(s):s).filter(Boolean);
@@ -48,27 +65,33 @@ export async function POST(req){
 
     const st = stakes[idx];
     const powerLabel = st.powerLabel || st.power;
-    
     const cfg = SERVER_PRICES[powerLabel];
     if(!cfg) return NextResponse.json({ success:false, message:'Invalid generator' }, {status:400});
     const amt = cfg.daily;
 
-    if(st.lastClaimDate === todayUg){
+    // FIXED: support both date formats
+    const last = String(st.lastClaimDate||'');
+    if(last === todayCA || last === todayGB){
       return NextResponse.json({ success:false, message:'Already collected today - come back at 00:00 Kampala' }, {status:400});
     }
 
     const calcDay = (() => {
       if(!st.ugStakedDate) return st.collectedDays||0;
-      const start = new Date(st.ugStakedDate);
-      const today = new Date(todayUg);
-      return Math.floor((today - start) / 86400000);
+      try{
+        const [y,m,d] = st.ugStakedDate.split('-').map(Number);
+        const startUTC = Date.UTC(y, m-1, d);
+        const [ty,tm,td] = todayCA.split('-').map(Number);
+        const todayUTC = Date.UTC(ty, tm-1, td);
+        return Math.floor((todayUTC - startUTC) / 86400000);
+      }catch{ return st.collectedDays||0; }
     })();
+
     if(calcDay >= 180 || (st.collectedDays||0) >= 180){
       return NextResponse.json({ success:false, message:'Generator expired 180/180' }, {status:400});
     }
 
     st.collectedDays = (st.collectedDays||0)+1;
-    st.lastClaimDate = todayUg;
+    st.lastClaimDate = todayCA; // always save as YYYY-MM-DD
     st.lastCollected = new Date().toISOString();
     stakes[idx] = st;
 
@@ -76,14 +99,18 @@ export async function POST(req){
     for(let i=stakes.length-1; i>=0; i--){
       await redis.lpush(stakesKey, JSON.stringify(stakes[i]));
     }
-    try{ await redis.set(`${P}stake:item:${stakeId}`, JSON.stringify(st)); }catch{}
+    await redis.set(`${P}stake:item:${stakeId}`, st);
 
     user.balance = Number(user.balance||0)+amt;
     user.availableBalance = Number(user.availableBalance||0)+amt;
     user.totalBalance = Number(user.totalBalance||0)+amt;
+    user.balance = user.totalBalance;
+    user.availableBalance = user.totalBalance;
     await redis.set(P+'user:'+user.userId, user);
+    try{
+      await redis.hset(`riot:user:${user.userId}`, { balance: user.totalBalance, totalBalance: user.totalBalance, availableBalance: user.totalBalance });
+    }catch{}
 
-    // FIXED TX - d/m/yr hr:mins
     const displayTime = getUgDMYHM();
     const tx = {
       id: `yield_${Date.now()}`,
@@ -94,13 +121,12 @@ export async function POST(req){
       stakeId,
       amount: amt,
       status: 'success',
-      displayTime: displayTime, // 04/11/2025 15:32
-      date: getUgDateGB(), // 04/11/2025
-      time: getUgTime(), // 15:32
+      displayTime,
+      date: todayGB,
+      time: getUgTime(),
       dateStr: displayTime,
       createdAt: displayTime,
-      ugandaDate: todayUg,
-      isoDate: todayUg,
+      ugandaDate: todayCA,
       display: `Yield ${powerLabel} +${amt.toLocaleString()} UGX`,
       timestamp: Date.now(),
       userId: user.userId,
