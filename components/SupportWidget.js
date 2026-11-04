@@ -91,7 +91,7 @@ export default function SupportWidget() {
               <p className="text-[11px] font-bold text-[#EBA043] mb-2">✈️ Telegram Support</p>
               <a href="https://t.me/Riotplatfom" target="_blank" className="flex items-center gap-2 bg-[#229ED9] text-white px-3 py-2.5 rounded-lg font-bold text-[13px]">
                 <span className="bg-white rounded-full w-6 h-6 flex items-center justify-center text-[#229ED9]">✈</span>
-                @Aliciia580
+                @Riotplatfom
               </a>
             </div>
 
