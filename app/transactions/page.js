@@ -38,13 +38,15 @@ export default function Page() {
     }; load();
   }, []);
 
+  // FIXED: parentheses so filters don't leak into each other
   const list = txs.filter(t=>{
     const type=(t.type||"").toString().toLowerCase();
+    const isReg = type.includes("regist") || type.includes("welcome") || (type.includes("bonus") && !type.includes("team")) || type.includes("reward") || type.includes("signup");
     if(filter==="All") return true;
-    if(filter==="Deposit") return type==="deposit" || type.includes("regist") || type.includes("bonus") && !type.includes("team") || type.includes("reward") || type.includes("welcome");
+    if(filter==="Deposit") return type==="deposit" || isReg;
     if(filter==="Withdraw") return type==="withdrawal" || type==="withdraw" || type.includes("withdraw");
-    if(filter==="Commission") return type.includes("team") && type.includes("payout") || type==="commission" || type.includes("commission") || type.includes("team_");
-    if(filter==="Stake") return type==="stake" || type.includes("stake") && !type.includes("yield");
+    if(filter==="Commission") return type==="commission" || type.includes("commission") || type.includes("team_") || (type.includes("team") && type.includes("payout"));
+    if(filter==="Stake") return type==="stake" || (type.includes("stake") && !type.includes("yield"));
     if(filter==="Yield") return type.includes("yield") || type==="stake yield";
     if(filter==="Turbo") return type.includes("turbo");
     return true;
@@ -78,7 +80,7 @@ export default function Page() {
             label= isPending ? "Withdraw pending" : "Withdraw"; 
             amount=`${Number(tx.originalAmount||tx.amount).toLocaleString()} UGX`; icon="↑";
           }
-          else if(type.includes("team") && type.includes("payout") || type.includes("commission")){
+          else if((type.includes("team") && type.includes("payout")) || type.includes("commission")){
             label= tx.label || `Commission ${type.includes("team_a")?"A":type.includes("team_b")?"B":type.includes("team_c")?"C":""}`; amount=`${Number(tx.amount).toLocaleString()} UGX`; icon="◍";
           }
           else if(type==="stake"){
@@ -95,7 +97,7 @@ export default function Page() {
           }
           else { label=rawType||"Transaction"; amount=`${Number(tx.amount||0).toLocaleString()} UGX`; icon="↓"; }
 
-          // date
+          // date - always Uganda time
           let dateStr = tx.dateStr || tx.date || tx.createdAt || "";
           try{
             if(!dateStr.includes("/")){

@@ -98,11 +98,8 @@ export default function SupportWidget() {
             <div className="bg-[#1A1C24] rounded-xl p-3 border border-gray-800">
               <p className="text-[11px] font-bold text-[#EBA043] mb-2">💬 WhatsApp Support</p>
               <div className="flex flex-col gap-2">
-                <a href="https://wa.me/447520643574" target="_blank" className="flex items-center gap-2 bg-[#25D366] text-white px-3 py-2.5 rounded-lg font-bold text-[13px]">
-                  🟢 +447520643574
-                </a>
-                <a href="https://wa.me/447520643712" target="_blank" className="flex items-center gap-2 bg-[#25D366] text-white px-3 py-2.5 rounded-lg font-bold text-[13px]">
-                  🟢 +447520643712
+                <a href="https://wa.me/447418376199" target="_blank" className="flex items-center gap-2 bg-[#25D366] text-white px-3 py-2.5 rounded-lg font-bold text-[13px]">
+                  🟢 +447418376199
                 </a>
               </div>
             </div>

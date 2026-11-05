@@ -50,7 +50,6 @@ export async function POST(req){
   try{
     const { userId, stakeId } = await req.json();
     if(!userId || !stakeId) return NextResponse.json({ success:false, message:'Missing stakeId' }, {status:400});
-    
     const user = await getUserByQuery(userId);
     if(!user) return NextResponse.json({ success:false, message:'User not found' }, {status:404});
 
@@ -59,7 +58,6 @@ export async function POST(req){
     const stakesKey = P+'stakes:'+user.userId;
     const stakesRaw = await redis.lrange(stakesKey, 0, 500);
     let stakes = stakesRaw.map(s => typeof s==='string'? parse(s):s).filter(Boolean);
-    
     const idx = stakes.findIndex(s => s.id === stakeId);
     if(idx === -1) return NextResponse.json({ success:false, message:'Stake not found' }, {status:404});
 
@@ -69,48 +67,57 @@ export async function POST(req){
     if(!cfg) return NextResponse.json({ success:false, message:'Invalid generator' }, {status:400});
     const amt = cfg.daily;
 
-    // FIXED: support both date formats
     const last = String(st.lastClaimDate||'');
     if(last === todayCA || last === todayGB){
       return NextResponse.json({ success:false, message:'Already collected today - come back at 00:00 Kampala' }, {status:400});
     }
 
-    const calcDay = (() => {
-      if(!st.ugStakedDate) return st.collectedDays||0;
+    // FIXED: Day count = diff + 1, based ONLY on ugStakedDate. Claim does NOT affect it.
+    let calcDay = 1;
+    if(st.ugStakedDate){
       try{
         const [y,m,d] = st.ugStakedDate.split('-').map(Number);
         const startUTC = Date.UTC(y, m-1, d);
         const [ty,tm,td] = todayCA.split('-').map(Number);
         const todayUTC = Date.UTC(ty, tm-1, td);
-        return Math.floor((todayUTC - startUTC) / 86400000);
-      }catch{ return st.collectedDays||0; }
-    })();
-
-    if(calcDay >= 180 || (st.collectedDays||0) >= 180){
+        calcDay = Math.floor((todayUTC - startUTC) / 86400000) + 1;
+      }catch{ calcDay = 1; }
+    }
+    if(calcDay > 180){
       return NextResponse.json({ success:false, message:'Generator expired 180/180' }, {status:400});
     }
 
-    st.collectedDays = (st.collectedDays||0)+1;
-    st.lastClaimDate = todayCA; // always save as YYYY-MM-DD
+    // Do NOT use collectedDays for countdown anymore, keep it only for stats
+    st.lastClaimDate = todayCA;
     st.lastCollected = new Date().toISOString();
     stakes[idx] = st;
 
-    await redis.del(stakesKey);
-    for(let i=stakes.length-1; i>=0; i--){
-      await redis.lpush(stakesKey, JSON.stringify(stakes[i]));
-    }
-    await redis.set(`${P}stake:item:${stakeId}`, st);
+    // FIXED: Use pipeline - no lag, one round trip instead of loop
+    const pipe = redis.pipeline();
+    pipe.del(stakesKey);
+    for(let i=stakes.length-1; i>=0; i--) pipe.lpush(stakesKey, JSON.stringify(stakes[i]));
+    pipe.set(`${P}stake:item:${stakeId}`, JSON.stringify(st));
+
+    // FIXED: Today's Yield for Mine page - reset at midnight Kampala, then add
+    const prevTodayDate = user.todayYieldDate || user.todayDate || '';
+    let todayYield = Number(user.todayYield || user.todayEarning || 0);
+    if(prevTodayDate !== todayCA) todayYield = 0;
+    todayYield += amt;
 
     user.balance = Number(user.balance||0)+amt;
     user.availableBalance = Number(user.availableBalance||0)+amt;
     user.totalBalance = Number(user.totalBalance||0)+amt;
     user.balance = user.totalBalance;
     user.availableBalance = user.totalBalance;
-    await redis.set(P+'user:'+user.userId, user);
-    try{
-      await redis.hset(`riot:user:${user.userId}`, { balance: user.totalBalance, totalBalance: user.totalBalance, availableBalance: user.totalBalance });
-    }catch{}
+    user.todayYield = todayYield;
+    user.todayEarning = todayYield;
+    user.todayYieldDate = todayCA;
+    user.todayDate = todayCA;
 
+    pipe.set(P+'user:'+user.userId, JSON.stringify(user));
+    pipe.hset(`riot:user:${user.userId}`, { balance: user.totalBalance, totalBalance: user.totalBalance, availableBalance: user.totalBalance, todayYield, todayEarning: todayYield, todayYieldDate: todayCA });
+
+    // FIXED: Tx time - createdAt = real ISO, displayTime = d/m/yr hr:mins
     const displayTime = getUgDMYHM();
     const tx = {
       id: `yield_${Date.now()}`,
@@ -125,14 +132,17 @@ export async function POST(req){
       date: todayGB,
       time: getUgTime(),
       dateStr: displayTime,
-      createdAt: displayTime,
+      fullDate: displayTime,
+      createdAt: new Date().toISOString(),
+      createdAtUg: displayTime,
       ugandaDate: todayCA,
       display: `Yield ${powerLabel} +${amt.toLocaleString()} UGX`,
       timestamp: Date.now(),
       userId: user.userId,
     };
-    await redis.lpush(P+'tx:'+user.userId, JSON.stringify(tx));
-    await redis.lpush(P+'transactions:'+user.userId, JSON.stringify(tx));
+    pipe.lpush(P+'tx:'+user.userId, JSON.stringify(tx));
+    pipe.lpush(P+'transactions:'+user.userId, JSON.stringify(tx));
+    await pipe.exec();
 
     return NextResponse.json({ success:true, user, tx, daily: amt });
   }catch(e){ 

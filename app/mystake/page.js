@@ -7,6 +7,8 @@ export default function MyStakePage() {
   const [myStakes, setMyStakes] = useState({ daily: [], weekend: [], hourly: [] });
   const [showCollect, setShowCollect] = useState(false);
   const [collectItem, setCollectItem] = useState(null);
+  const [isCollecting, setIsCollecting] = useState(false);
+  const [successMsg, setSuccessMsg] = useState(null);
 
   const REAL_STAKE_LIST = {
     "1W": { stakePower: 20000, daily: 1000, img: "/p1.jpg" },
@@ -30,19 +32,20 @@ export default function MyStakePage() {
   const getUgDateStr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' });
   const getUgDateGB = () => new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Kampala' });
 
+  // FIXED: +1 so stake day = 1/180, midnight Kampala = 2/180, never affected by claim
   const calcDayCount = (ugStakedDate) => {
-    if(!ugStakedDate) return 0;
+    if(!ugStakedDate) return 1;
     try {
       const parts = ugStakedDate.split('-');
-      if(parts.length !== 3) return 0;
+      if(parts.length !== 3) return 1;
       const [y,m,d] = parts.map(Number);
       const startUTC = Date.UTC(y, m-1, d);
       const todayStr = getUgDateStr();
       const [ty,tm,td] = todayStr.split('-').map(Number);
       const todayUTC = Date.UTC(ty, tm-1, td);
       const diff = Math.floor((todayUTC - startUTC) / 86400000);
-      return Math.min(Math.max(diff, 0), 180);
-    } catch { return 0; }
+      return Math.min(Math.max(diff + 1, 1), 180);
+    } catch { return 1; }
   };
 
   const hasCollectedToday = (item) => {
@@ -73,13 +76,14 @@ export default function MyStakePage() {
   useEffect(() => { loadStakes(); const i = setInterval(() => loadStakes(), 60000); return () => clearInterval(i); }, []);
   
   const handleReceiveClick = (item) => {
-    if (calcDayCount(item.ugStakedDate) >= 180) return;
+    if (calcDayCount(item.ugStakedDate) > 180) return;
     if (hasCollectedToday(item)) return;
     setCollectItem(item); setShowCollect(true);
   };
 
   const confirmCollect = async () => {
-    if(!collectItem) return;
+    if(!collectItem || isCollecting) return;
+    setIsCollecting(true);
     const uid = getStableUserId();
     try {
       const res = await fetch("/api/claim-yield", {
@@ -88,21 +92,28 @@ export default function MyStakePage() {
         body: JSON.stringify({ userId: uid, stakeId: collectItem.id })
       });
       const data = await res.json();
-      if (!res.ok || !data.success) { alert(data.message||"Claim failed"); setShowCollect(false); return; }
+      if (!res.ok || !data.success) { alert(data.message||"Claim failed"); setShowCollect(false); setIsCollecting(false); return; }
       if (data.user) localStorage.setItem("riot_user", JSON.stringify(data.user));
       await loadStakes();
-    } catch {}
-    setShowCollect(false);
+      setShowCollect(false);
+      setSuccessMsg(`Yield collection successful! +${(data.daily||data.tx?.amount||0).toLocaleString()} UGX`);
+      setTimeout(()=> setSuccessMsg(null), 3000);
+    } catch(e){ alert("Network error, try again"); }
+    setIsCollecting(false);
   };
 
   const currentList = myStakes[tab] || [];
+  const tabBtn = (key,label) => (
+    <button key={key} onClick={()=>setTab(key)} className={`flex-1 h-[48px] rounded-full text-[15px] font-bold transition ${tab===key?"bg-[#EBA043] text-black shadow":"bg-[#232323] text-white/80"}`}>{label}</button>
+  );
 
   return (
     <div className="min-h-screen w-full bg-[#141414] flex flex-col pb-[110px]">
+      {/* FIXED: Medium-long tabs, full width */}
       <div className="flex gap-2 p-4">
-        <button onClick={()=>setTab("daily")} className={`px-4 py-2 rounded ${tab==="daily"?"bg-[#EBA043] text-black":"bg-[#232323] text-white"}`}>Daily</button>
-        <button onClick={()=>setTab("weekend")} className={`px-4 py-2 rounded ${tab==="weekend"?"bg-[#EBA043] text-black":"bg-[#232323] text-white"}`}>Weekend</button>
-        <button onClick={()=>setTab("hourly")} className={`px-4 py-2 rounded ${tab==="hourly"?"bg-[#EBA043] text-black":"bg-[#232323] text-white"}`}>Hourly</button>
+        {tabBtn("daily","Daily")}
+        {tabBtn("weekend","Weekend")}
+        {tabBtn("hourly","Hourly")}
       </div>
 
       <div className="px-4 flex flex-col gap-3">
@@ -111,7 +122,7 @@ export default function MyStakePage() {
           const real = REAL_STAKE_LIST[item.powerLabel || item.power] || { daily: item.daily || 0, stakePower: 0, img: "" };
           const dayCount = calcDayCount(item.ugStakedDate);
           const collectedToday = hasCollectedToday(item);
-          const isExpired = dayCount >= 180;
+          const isExpired = dayCount > 180;
           const isReady = !isExpired && !collectedToday;
           return (
             <div key={item.id || idx} className="w-full bg-[#181B22] border border-[#EBA043]/20 rounded-[16px] p-3 flex gap-3">
@@ -132,13 +143,17 @@ export default function MyStakePage() {
         })}
       </div>
 
+      {successMsg && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] bg-green-600 text-white font-bold text-[13px] px-4 py-3 rounded-full shadow-lg">{successMsg}</div>
+      )}
+
       {showCollect && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
           <div className="bg-[#1E1E1E] rounded-[16px] p-5 w-full max-w-[320px]">
             <div className="text-white font-bold text-center mb-4">Collect {collectItem?.powerLabel} yield?</div>
             <div className="flex gap-3">
-              <button onClick={()=>setShowCollect(false)} className="flex-1 h-[44px] bg-[#333] text-white rounded">Cancel</button>
-              <button onClick={confirmCollect} className="flex-1 h-[44px] bg-[#EBA043] text-black font-bold rounded">Confirm</button>
+              <button onClick={()=>setShowCollect(false)} disabled={isCollecting} className="flex-1 h-[44px] bg-[#333] text-white rounded">Cancel</button>
+              <button onClick={confirmCollect} disabled={isCollecting} className="flex-1 h-[44px] bg-[#EBA043] text-black font-bold rounded">{isCollecting ? "Collecting..." : "Confirm"}</button>
             </div>
           </div>
         </div>

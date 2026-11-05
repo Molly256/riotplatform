@@ -19,18 +19,77 @@ export default function WithdrawMethod() {
   const title = isMTN ? 'MTN Mobile Money' : 'Airtel Money Uganda'
 
   useEffect(()=>{
-    const riotUser = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}')
-    const bal = riotUser.totalBalance || riotUser.balance || localStorage.getItem('riot_balance') || '0'
-    setBalance(String(bal))
+    // 1. INSTANT: Show cached Mine total first - same as Mine page
+    const safeLocal = (v) => Number(String(v || 0).replace(/,/g, '')) || 0
+    try {
+      const cachedTotals = JSON.parse(localStorage.getItem("riot_totals") || "null")
+      if (cachedTotals) {
+        setBalance(String(safeLocal(cachedTotals.totalBalance)))
+      } else {
+        const riotUser = JSON.parse(localStorage.getItem('riot_user') || localStorage.getItem('user') || '{}')
+        const bal = safeLocal(localStorage.getItem('totalBalance') || riotUser.totalBalance || riotUser.balance || localStorage.getItem('riot_balance') || 0)
+        if (bal > 0) setBalance(String(bal))
+      }
+    } catch {}
+
+    // 2. FRESH: Fetch SAME as Mine page - /api/mine -> totals.totalBalance
+    // NO TIME CHECK HERE - let them fill form freely
+    const saved = JSON.parse(localStorage.getItem("riot_user") || localStorage.getItem("currentUser") || localStorage.getItem("user") || "null")
+    const q = saved?.userId || saved?.id || localStorage.getItem("userId") || localStorage.getItem("rp_userId") || saved?.phone || ""
+    if (!q) return
+
+    fetch("/api/mine", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: q }),
+      cache: "no-store"
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          const t = d.totals || {}
+          const u = d.user || {}
+          const safe = (v) => Number(String(v || 0).replace(/,/g, '')) || 0
+          // EXACT SAME KEY AS MINE PAGE
+          const realBalance = safe(t.totalBalance ?? u.totalBalance ?? u.balance ?? 0)
+          setBalance(String(realBalance))
+          localStorage.setItem("totalBalance", String(realBalance))
+          try {
+            const oldTotals = JSON.parse(localStorage.getItem("riot_totals") || "{}")
+            localStorage.setItem("riot_totals", JSON.stringify({ ...oldTotals, totalBalance: realBalance }))
+          } catch {}
+          const merged = { ...saved, ...u, totalBalance: realBalance, balance: realBalance }
+          localStorage.setItem("riot_user", JSON.stringify(merged))
+          localStorage.setItem("currentUser", JSON.stringify(merged))
+          localStorage.setItem("user", JSON.stringify(merged))
+        }
+      })
+      .catch(() => {})
   },[])
 
   const fee = amount ? Math.floor(Number(amount) * 0.1) : 0
   const receive = amount ? Number(amount) - fee : 0
 
   function triggerToast(msg){
-    setToastMsg(msg)
+    setToastMsg(msg || 'Something went wrong')
     setToast(true)
-    setTimeout(()=>setToast(false), 3000)
+    setTimeout(()=>setToast(false), 3500)
+  }
+
+  // ONLY called on tap of Confirm Withdraw - NOT on load, NOT while typing
+  function checkWithdrawTimeOnTap(){
+    const nowUg = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Kampala' }));
+    const day = nowUg.getDay(); // 0=Sunday
+    const hour = nowUg.getHours();
+    if(day === 0){
+      triggerToast('Withdrawals are closed on Sunday. Available Monday to Saturday.');
+      return false;
+    }
+    if(hour < 9 || hour >= 18){
+      triggerToast('Withdrawals are only available Monday to Saturday from 9:00AM to 6:00PM Uganda time.');
+      return false;
+    }
+    return true;
   }
 
   async function confirmWithdraw(){
@@ -38,6 +97,8 @@ export default function WithdrawMethod() {
     if(!holderName) return triggerToast('Enter Holders Names')
     if(!walletNumber) return triggerToast('Enter Wallet number')
     if(Number(amount) > Number(balance)) return triggerToast('Insufficient balance')
+    // TIME CHECK ONLY HERE - on tap
+    if(!checkWithdrawTimeOnTap()) return;
 
     setLoading(true)
     try{
@@ -54,7 +115,8 @@ export default function WithdrawMethod() {
         body: JSON.stringify({ userId, phone, username, amount, holderName, walletNumber, method: title, fee, receive })
       })
       const j = await res.json()
-      if(!j.success){ triggerToast(j.error); setLoading(false); return; }
+      // BACK CHECK ALSO ONLY ON TAP - 1 per day, time, min - pops here
+      if(!j.success){ triggerToast(j.error || j.message || 'Withdraw failed'); setLoading(false); return; }
 
       localStorage.setItem('riot_balance', String(j.newBalance))
       const updatedUser = {...riotUser, totalBalance: j.newBalance, balance: j.newBalance}
@@ -77,6 +139,13 @@ export default function WithdrawMethod() {
         <h1 className="text-black font-black text-[15px] m-0">WITHDRAW</h1>
       </div>
       <div className="p-4 max-w-[480px] mx-auto">
+        {/* Total balance - SAME as Mine page, SAME as /withdraw page */}
+        <div className="bg-[#EBA043] rounded-[14px] p-4 mb-4">
+          <p className="text-black text-[13px] font-bold">Total balance</p>
+          <p className="text-black text-[28px] font-black mt-1">{Number(balance || 0).toLocaleString()} UGX</p>
+          <p className="text-black/60 text-[11px] font-bold mt-1">{title}</p>
+        </div>
+
         <div className="bg-[#12131A] border border-[#2A2C35] rounded-[14px] p-4 space-y-4">
           <div>
             <label className="text-[12px] font-bold text-[#8A8D98]">Holder's Names:</label>
@@ -99,10 +168,13 @@ export default function WithdrawMethod() {
           </div>
         </div>
         <button disabled={loading} onClick={confirmWithdraw} className="w-full mt-6 py-4 bg-[#EBA043] text-black font-black rounded-[12px] text-[16px] disabled:opacity-60">{loading?'Processing...':'Confirm Withdraw'}</button>
+
+        {/* Withdraw rules - EXACT 1:1 like /withdraw screenshot */}
         <div className="mt-8">
           <p className="text-[#EBA043] font-black text-[15px] mb-2">Withdraw rules</p>
           <div className="text-[#8A8D98] text-[13px] font-bold leading-6">
-            <p>Withdraw: 24/7 Available</p>
+            <p>Withdraw Days: Monday to Saturday.</p>
+            <p>Withdraw Time: 9:00am to 6:00pm</p>
             <p>Withdraw fee: 10%</p>
             <p>Minimum withdraw amount: 2,000 UGX</p>
           </div>

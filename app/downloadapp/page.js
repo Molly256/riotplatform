@@ -67,6 +67,31 @@ export default function DownloadApp() {
         >
           Download Riotplatform app
         </button>
+
+        {/* Instructions - below Download button */}
+        <div className="w-full max-w-[360px] mt-10">
+          <p className="text-[#EBA043] font-black text-[16px] mb-3">📲 How to Install the App</p>
+
+          <div className="flex flex-col gap-3 text-[13px] font-bold leading-6">
+            <div className="bg-[#12131A] border border-[#2A2C35] rounded-[12px] p-3">
+              <p className="text-white">🤖 For Android - Chrome</p>
+              <p className="text-[#8A8D98] mt-1">👆 Tap the <span className="text-white">Download Riotplatform app</span> button above, then tap <span className="text-white">Install</span> when the popup appears.</p>
+              <p className="text-[#8A8D98]">⋮ If no popup shows, tap the browser menu <span className="text-white">⋮</span> on top right → tap <span className="text-white">Install app</span> or <span className="text-white">Add to Home screen</span>.</p>
+            </div>
+
+            <div className="bg-[#12131A] border border-[#2A2C35] rounded-[12px] p-3">
+              <p className="text-white">🍎 For iPhone - Safari</p>
+              <p className="text-[#8A8D98] mt-1">📤 Tap the <span className="text-white">Share</span> button at the bottom of Safari.</p>
+              <p className="text-[#8A8D98]">➕ Scroll down and tap <span className="text-white">Add to Home Screen</span>, then tap <span className="text-white">Add</span> on top right.</p>
+            </div>
+
+            <div className="bg-[#12131A] border border-[#2A2C35] rounded-[12px] p-3">
+              <p className="text-white">🏠 After Installing</p>
+              <p className="text-[#8A8D98] mt-1">📱 You will see the Riotplatform icon on your home screen like a normal app.</p>
+              <p className="text-[#8A8D98]">✅ Tap it to open the app fast, without opening the browser every time.</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <style>{`

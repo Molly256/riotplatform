@@ -43,6 +43,29 @@ const getUgToday = () => {
   return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`;
 };
 const getUgTodayISO = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' })
+const getUgTodayGB = () => new Date().toLocaleDateString('en-GB', { timeZone: 'Africa/Kampala' })
+
+// FIXED: Normalise ANY date format to YYYY-MM-DD
+// "05/11/2026" == "5/11/2026" == "2026-11-05" == "05/11/2026 14:32" == ISO timestamp
+const toISODate = (val) => {
+  if(!val) return '';
+  const s = String(val).trim();
+  // Already YYYY-MM-DD or YYYY-MM-DDTHH...
+  if(/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+  // DD/MM/YYYY or D/M/YYYY + optional time "05/11/2026 14:32"
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if(m){
+    const dd = m[1].padStart(2,'0');
+    const mm = m[2].padStart(2,'0');
+    return `${m[3]}-${mm}-${dd}`;
+  }
+  // ISO timestamp - convert to Kampala date
+  const d = new Date(s);
+  if(!isNaN(d.getTime())){
+    return d.toLocaleDateString('en-CA', { timeZone: 'Africa/Kampala' });
+  }
+  return '';
+};
 
 export async function POST(req){
   try{
@@ -58,6 +81,7 @@ export async function POST(req){
 
     const todayStr = getUgToday();
     const todayISO = getUgTodayISO();
+    const todayGB = getUgTodayGB();
     
     let totalPowerDeposited = 0;
     let totalWithdraw = 0;
@@ -91,8 +115,18 @@ export async function POST(req){
 
       if((typeLow.includes('yield') || typeLow.includes('profit')) && status==='success'){
         totalStakeYield += amt;
-        const dStr = (tx.dateStr || tx.date || tx.createdAt || tx.fullDate || '').toString();
-        if(dStr.startsWith(todayStr) || dStr.includes(todayISO) || String(tx.ugandaDate||'').includes(todayStr)){
+        // FIXED: Check ALL date fields, normalised to ISO. Old check failed because "05/11/2026" != "5/11/2026"
+        const candidates = [
+          tx.ugandaDate,
+          tx.date,
+          tx.dateStr,
+          tx.createdAt,
+          tx.createdAtUg,
+          tx.fullDate,
+          tx.timestamp ? new Date(Number(tx.timestamp)).toISOString() : ''
+        ];
+        const isToday = candidates.some(c => toISODate(c) === todayISO);
+        if(isToday){
           todaysYield += amt;
         }
       }
