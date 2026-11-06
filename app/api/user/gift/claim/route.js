@@ -5,31 +5,57 @@ const P = "rp:"
 
 export async function POST(req){
   const { code, userId, preview } = await req.json()
-  if(!code || !userId) return Response.json({valid:false, message:"Missing code or user"}, {status:400})
+  if(!code || !userId) return Response.json({valid:false, success:false, message:"Missing code or user"}, {status:400})
 
   const CODE = code.trim().toUpperCase()
   const giftKey = `${P}gift:code:${CODE}`
   const gift = await redis.hgetall(giftKey)
 
-  if(!gift || !gift.code) return Response.json({valid:false, message:"Gift code invalid"})
+  if(!gift || !gift.code) return Response.json({valid:false, success:false, message:"Gift code invalid"})
 
-  // For small box that shows worth
+  // FIXED: Preview - NO amount, check count vs max
   if(preview){
-    if(gift.status === "claimed") return Response.json({valid:false, message:"Already claimed"})
-    return Response.json({valid:true, amount: Number(gift.amount)})
+    const max = Number(gift.maxClaims || 1)
+    const count = Number(gift.claimedCount || 0)
+    // If old codes have no maxClaims, fallback to status check
+    if(gift.status === "claimed" && max === 1 && count >= 1) return Response.json({valid:false, success:false, message:"Gift already grabbed by someone be fast next time 😞"})
+    if(count >= max) return Response.json({valid:false, success:false, message:"Gift already grabbed by someone be fast next time 😞"})
+    return Response.json({valid:true, success:true})
   }
 
-  // ATOMIC CLAIM - Lua to prevent double claim
+  // ATOMIC CLAIM FOR N USERS - Lua to prevent double claim + over-claim
   const lua = `
-    local status = redis.call('HGET', KEYS[1], 'status')
-    if status == 'claimed' then return 0 end
-    redis.call('HSET', KEYS[1], 'status', 'claimed', 'claimedBy', ARGV[1], 'claimedAt', ARGV[2])
-    return 1
+    local key = KEYS[1]
+    local userId = ARGV[1]
+    local now = ARGV[2]
+    local maxClaims = tonumber(redis.call('HGET', key, 'maxClaims') or '1')
+    local claimedCount = tonumber(redis.call('HGET', key, 'claimedCount') or '0')
+
+    -- Same user already claimed this code?
+    if redis.call('SISMEMBER', key..':claimedUsers', userId) == 1 then return -1 end
+
+    -- Limit reached?
+    if claimedCount >= maxClaims then return 0 end
+
+    claimedCount = claimedCount + 1
+    redis.call('HSET', key, 'claimedCount', claimedCount)
+    redis.call('SADD', key..':claimedUsers', userId)
+    redis.call('HSET', key, 'claimedBy', userId, 'claimedAt', now)
+
+    if claimedCount >= maxClaims then
+      redis.call('HSET', key, 'status', 'claimed')
+    end
+
+    return claimedCount
   `
   const claimed = await redis.eval(lua, [giftKey], [String(userId), String(Date.now())])
 
   if(claimed === 0){
-    return Response.json({valid:false, message:"Gift code invalid - already grabbed by someone else"})
+    // Limit reached - 6th user for 5-user code
+    return Response.json({valid:false, success:false, message:"Gift already grabbed by someone be fast next time 😞"})
+  }
+  if(claimed === -1){
+    return Response.json({valid:false, success:false, message:"You already claimed this gift"})
   }
 
   const amount = Number(gift.amount)
@@ -37,7 +63,7 @@ export async function POST(req){
   // === EXACT SAME AS adminDeposit IN /api/admin ===
   let user = await redis.get(`${P}user:${userId}`)
   if(typeof user === 'string'){ try{ user = JSON.parse(user) }catch{} }
-  if(!user) return Response.json({valid:false, message:"User not found"}, {status:404})
+  if(!user) return Response.json({valid:false, success:false, message:"User not found"}, {status:404})
 
   user.totalBalance = Number(user.totalBalance||0) + amount
   user.balance = user.totalBalance
