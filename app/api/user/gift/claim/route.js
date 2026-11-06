@@ -13,13 +13,16 @@ export async function POST(req){
 
   if(!gift || !gift.code) return Response.json({valid:false, success:false, message:"Gift code invalid"})
 
-  // FIXED: Preview - NO amount, check count vs max
+  // FIXED: Preview - NO amount, check count vs max + already claimed
   if(preview){
+    // NEW: Check if THIS user already claimed - show Oops popup
+    const already = await redis.sismember(`${giftKey}:claimedUsers`, String(userId))
+    if(already === 1) return Response.json({valid:false, success:false, type:"already_claimed", message:"Oops you already claimed the gift"})
+
     const max = Number(gift.maxClaims || 1)
     const count = Number(gift.claimedCount || 0)
-    // If old codes have no maxClaims, fallback to status check
-    if(gift.status === "claimed" && max === 1 && count >= 1) return Response.json({valid:false, success:false, message:"Gift already grabbed by someone be fast next time 😞"})
-    if(count >= max) return Response.json({valid:false, success:false, message:"Gift already grabbed by someone be fast next time 😞"})
+    if(gift.status === "claimed" && max === 1 && count >= 1) return Response.json({valid:false, success:false, type:"grabbed", message:"Gift already grabbed by someone be fast next time 😞"})
+    if(count >= max) return Response.json({valid:false, success:false, type:"grabbed", message:"Gift already grabbed by someone be fast next time 😞"})
     return Response.json({valid:true, success:true})
   }
 
@@ -52,10 +55,11 @@ export async function POST(req){
 
   if(claimed === 0){
     // Limit reached - 6th user for 5-user code
-    return Response.json({valid:false, success:false, message:"Gift already grabbed by someone be fast next time 😞"})
+    return Response.json({valid:false, success:false, type:"grabbed", message:"Gift already grabbed by someone be fast next time 😞"})
   }
   if(claimed === -1){
-    return Response.json({valid:false, success:false, message:"You already claimed this gift"})
+    // CHANGED: Was "You already claimed this gift" -> Now "Oops you already claimed the gift"
+    return Response.json({valid:false, success:false, type:"already_claimed", message:"Oops you already claimed the gift"})
   }
 
   const amount = Number(gift.amount)
@@ -83,5 +87,5 @@ export async function POST(req){
   }
   await redis.lpush(`${P}tx:${userId}`, JSON.stringify(tx))
 
-  return Response.json({success:true, amount, user, totalBalance: user.totalBalance})
+  return Response.json({success:true, type:"success", amount, user, totalBalance: user.totalBalance})
 }
