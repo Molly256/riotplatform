@@ -91,6 +91,7 @@ export async function POST(req){
     let totalTeamCommission = 0;
     let totalTurboWattsEarned = 0;
     let totalTurboExchangeUGX = 0;
+    let totalGift = 0; // ADDED FOR GIFT
 
     for(const tx of txs){
       const type = (tx.type||tx.label||'').toString();
@@ -100,6 +101,11 @@ export async function POST(req){
       
       if((typeLow==='deposit' || typeLow.includes('system increase')) && (status==='success' || status==='approved')){
         if(!typeLow.includes('regist') && !typeLow.includes('bonus') && !typeLow.includes('reward')) totalPowerDeposited += amt;
+      }
+
+      // ADDED FOR GIFT - count gift same as deposit
+      if((typeLow==='gift' || typeLow.includes('gift') || typeLow.includes('gift_code')) && (status==='success' || status==='approved')){
+        totalGift += amt;
       }
 
       if(typeLow==='withdraw' || typeLow.includes('withdraw')){
@@ -153,10 +159,10 @@ export async function POST(req){
       totalTurboWattsEarned = dbTurboPower + totalTurboExchangeUGX/1000;
     }
 
-    const sumIncome = totalPowerDeposited + totalStakeYield + totalTeamCommission + totalTurboExchangeUGX + 1000
-    const correctBalance = Math.max(0, sumIncome - totalStake - totalWithdraw)
+    const sumIncome = totalPowerDeposited + totalStakeYield + totalTeamCommission + totalTurboExchangeUGX + totalGift + 1000
     
     let totalBalance = Number(user.totalBalance||user.balance||0)
+    const correctBalance = Math.max(0, sumIncome - totalStake - totalWithdraw)
     
     if(Math.abs(totalBalance - correctBalance) > 0.5){
       if(totalBalance < sumIncome || totalBalance > correctBalance){
