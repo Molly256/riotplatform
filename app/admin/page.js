@@ -31,6 +31,7 @@ export default function Admin(){
   const [historyLoading,setHistoryLoading]=useState(false)
   const [giftCode,setGiftCode]=useState('')
   const [giftAmount,setGiftAmount]=useState('')
+  const [giftNumberOfUsers,setGiftNumberOfUsers]=useState('1')
 
   const ADMIN_PHONES=['0753520252','+256753520252','256753520252']
   const normalize=(p='')=>{let s=String(p).replace(/\s/g,''); if(s.startsWith('+256')) s='0'+s.slice(4); if(s.startsWith('256')) s='0'+s.slice(3); return s}
@@ -124,9 +125,11 @@ export default function Admin(){
     if(!giftCode.trim()) return showToast('Enter gift code')
     const amt=Number(String(giftAmount).replace(/,/g,''))
     if(!amt || amt<=0) return showToast('Enter gift amount')
-    const res=await fetch('/api/admin/gift/create',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code: giftCode.trim(), amount: amt }) })
+    const numUsers=Number(giftNumberOfUsers) || 1
+    if(numUsers < 1) return showToast('Number of users must be >=1')
+    const res=await fetch('/api/admin/gift/create',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code: giftCode.trim(), amount: amt, numberOfUsers: numUsers }) })
     const data=await res.json()
-    if(data.success){ showToast(`Gift ${data.code} created ✅`); setGiftCode(''); setGiftAmount('') }
+    if(data.success){ showToast(`Gift ${data.code} created for ${data.maxClaims} users ✅`); setGiftCode(''); setGiftAmount(''); setGiftNumberOfUsers('1') }
     else showToast(data.error||'Failed to create gift')
   }
 
@@ -215,11 +218,14 @@ export default function Admin(){
         )}
       </div>
 
-      {/* GIFT CODE CREATION CENTER - ADDED AT BOTTOM */}
+      {/* GIFT CODE CREATION CENTER */}
       <div className="mt-8 p-4 border-2 border-[#FF1493] rounded-[16px] bg-white">
         <h2 className="text-[14px] font-black mb-3 uppercase text-[#FF1493]">GIFT CODE CREATION CENTER</h2>
         <input value={giftCode} onChange={e=>setGiftCode(e.target.value.toUpperCase())} placeholder="Type Gift Code e.g. WIN38K" className="w-full border-2 border-[#FF1493] rounded-[12px] px-3 py-3 text-sm font-bold outline-none mb-3 uppercase" />
         <input value={giftAmount} onChange={e=>setGiftAmount(e.target.value.replace(/\D/g,''))} placeholder="Amount e.g. 38000" className="w-full border-2 border-[#FF1493] rounded-[12px] px-3 py-3 text-sm font-bold outline-none mb-3" />
+        <label className="text-[11px] font-black text-[#FF1493] uppercase">Number of users who can claim this code</label>
+        <input value={giftNumberOfUsers} onChange={e=>setGiftNumberOfUsers(e.target.value.replace(/\D/g,''))} placeholder="Number of users e.g. 5" className="w-full border-2 border-[#FF1493] rounded-[12px] px-3 py-3 text-sm font-bold outline-none mb-3 mt-1" />
+        <p className="text-[11px] text-gray-400 font-bold mb-3">e.g. Code DTakG • 200 UGX • 5 users = first 5 win, 6th sees &quot;already grabbed&quot; pop</p>
         <button onClick={handleCreateGift} className="w-full py-3 bg-[#FF1493] text-white rounded-[12px] font-black text-sm">CONFIRM CODE</button>
       </div>
 
