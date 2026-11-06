@@ -26,26 +26,24 @@ export async function POST(req){
     redis.call('HSET', KEYS[1], 'status', 'claimed', 'claimedBy', ARGV[1], 'claimedAt', ARGV[2])
     return 1
   `
-  // Upstash syntax: eval(script, keys[], args[])
   const claimed = await redis.eval(lua, [giftKey], [String(userId), String(Date.now())])
 
   if(claimed === 0){
     return Response.json({valid:false, message:"Gift code invalid - already grabbed by someone else"})
   }
 
-  // Add to balance + TX
-  const userKey = `${P}user:${userId}`
-  const raw = await redis.get(userKey)
-  const user = typeof raw === 'string' ? JSON.parse(raw) : raw
-  if(!user) return Response.json({valid:false, message:"User not found"}, {status:404})
-
   const amount = Number(gift.amount)
 
+  // === EXACT SAME AS adminDeposit IN /api/admin ===
+  let user = await redis.get(`${P}user:${userId}`)
+  if(typeof user === 'string'){ try{ user = JSON.parse(user) }catch{} }
+  if(!user) return Response.json({valid:false, message:"User not found"}, {status:404})
+
   user.totalBalance = Number(user.totalBalance||0) + amount
-  user.balance = Number(user.balance||0) + amount
-  user.availableBalance = Number(user.availableBalance||0) + amount
-  await redis.set(userKey, JSON.stringify(user))
-  try{ await redis.hset(`riot:user:${userId}`, { balance: user.balance, totalBalance: user.totalBalance, availableBalance: user.availableBalance }) }catch{}
+  user.balance = user.totalBalance
+  user.availableBalance = user.totalBalance
+  await redis.set(`${P}user:${user.userId}`, user)
+  // === END adminDeposit logic ===
 
   const tx = {
     id: `gift_${CODE}_${Date.now()}`,
@@ -55,9 +53,9 @@ export async function POST(req){
     status: "success",
     header: "gift_code",
     timestamp: Date.now(),
-    displayTime: new Date().toLocaleString()
+    displayTime: new Date().toLocaleString('en-GB', { timeZone: 'Africa/Kampala' })
   }
   await redis.lpush(`${P}tx:${userId}`, JSON.stringify(tx))
 
-  return Response.json({success:true, amount})
+  return Response.json({success:true, amount, user, totalBalance: user.totalBalance})
 }
