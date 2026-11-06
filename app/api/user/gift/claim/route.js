@@ -1,15 +1,17 @@
-import { createClient } from "redis"
-const client = createClient({ url: process.env.REDIS_URL })
-await client.connect().catch(()=>{})
+import { Redis } from "@upstash/redis"
+
+const redis = Redis.fromEnv()
 const P = "rp:"
 
 export async function POST(req){
   const { code, userId, preview } = await req.json()
+  if(!code || !userId) return Response.json({valid:false, message:"Missing code or user"}, {status:400})
+
   const CODE = code.trim().toUpperCase()
   const giftKey = `${P}gift:code:${CODE}`
-  const gift = await client.hGetAll(giftKey)
+  const gift = await redis.hgetall(giftKey)
 
-  if(!gift.code) return Response.json({valid:false, message:"Gift code invalid"})
+  if(!gift || !gift.code) return Response.json({valid:false, message:"Gift code invalid"})
 
   // For small box that shows worth
   if(preview){
@@ -24,7 +26,8 @@ export async function POST(req){
     redis.call('HSET', KEYS[1], 'status', 'claimed', 'claimedBy', ARGV[1], 'claimedAt', ARGV[2])
     return 1
   `
-  const claimed = await client.eval(lua, { keys: [giftKey], arguments: [userId, String(Date.now())] })
+  // Upstash syntax: eval(script, keys[], args[])
+  const claimed = await redis.eval(lua, [giftKey], [String(userId), String(Date.now())])
 
   if(claimed === 0){
     return Response.json({valid:false, message:"Gift code invalid - already grabbed by someone else"})
@@ -32,15 +35,17 @@ export async function POST(req){
 
   // Add to balance + TX
   const userKey = `${P}user:${userId}`
-  const raw = await client.get(userKey)
+  const raw = await redis.get(userKey)
   const user = typeof raw === 'string' ? JSON.parse(raw) : raw
+  if(!user) return Response.json({valid:false, message:"User not found"}, {status:404})
+
   const amount = Number(gift.amount)
 
   user.totalBalance = Number(user.totalBalance||0) + amount
   user.balance = Number(user.balance||0) + amount
   user.availableBalance = Number(user.availableBalance||0) + amount
-  await client.set(userKey, JSON.stringify(user))
-  try{ await client.hSet(`riot:user:${userId}`, { balance: user.balance, totalBalance: user.totalBalance, availableBalance: user.availableBalance }) }catch{}
+  await redis.set(userKey, JSON.stringify(user))
+  try{ await redis.hset(`riot:user:${userId}`, { balance: user.balance, totalBalance: user.totalBalance, availableBalance: user.availableBalance }) }catch{}
 
   const tx = {
     id: `gift_${CODE}_${Date.now()}`,
@@ -52,7 +57,7 @@ export async function POST(req){
     timestamp: Date.now(),
     displayTime: new Date().toLocaleString()
   }
-  await client.lPush(`${P}tx:${userId}`, JSON.stringify(tx))
+  await redis.lpush(`${P}tx:${userId}`, JSON.stringify(tx))
 
   return Response.json({success:true, amount})
 }

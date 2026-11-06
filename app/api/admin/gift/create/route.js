@@ -1,6 +1,6 @@
-import { createClient } from "redis"
-const client = createClient({ url: process.env.REDIS_URL })
-await client.connect().catch(()=>{})
+import { Redis } from "@upstash/redis"
+
+const redis = Redis.fromEnv()
 const P = "rp:"
 
 export async function POST(req){
@@ -10,10 +10,10 @@ export async function POST(req){
   const CODE = code.trim().toUpperCase()
   const key = `${P}gift:code:${CODE}`
 
-  const exists = await client.exists(key)
+  const exists = await redis.exists(key)
   if(exists) return Response.json({error:"Code already exists"}, {status:400})
 
-  await client.hSet(key, {
+  await redis.hset(key, {
     code: CODE,
     amount: String(amount),
     status: "active",
@@ -21,7 +21,7 @@ export async function POST(req){
     claimedBy: "",
     claimedAt: ""
   })
-  await client.lPush(`${P}gift:codes:list`, JSON.stringify({code: CODE, amount}))
+  await redis.lpush(`${P}gift:codes:list`, JSON.stringify({code: CODE, amount}))
 
   return Response.json({success:true, code:CODE, amount})
 }

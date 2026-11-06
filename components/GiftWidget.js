@@ -12,7 +12,6 @@ export default function GiftWidget({ userId: propUserId }){
   const moved = useRef(false)
   const offset = useRef({x:0,y:0})
 
-  // Auto-find userId if dashboard didn't pass it
   useEffect(()=>{
     if(propUserId) { setUserId(propUserId); return }
     try{
@@ -29,26 +28,34 @@ export default function GiftWidget({ userId: propUserId }){
     }catch{}
   },[propUserId])
 
+  // FIX: drag on window, not just button
+  useEffect(()=>{
+    const onMove = (e)=>{
+      if(!dragging.current) return
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY
+      const nx = clientX - offset.current.x
+      const ny = clientY - offset.current.y
+      if(Math.abs(nx - pos.x) > 5 || Math.abs(ny - pos.y) > 5) moved.current = true
+      setPos({ x: nx, y: ny })
+    }
+    const onUp = ()=>{
+      dragging.current = false
+      setTimeout(()=>{ moved.current = false }, 100)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    window.addEventListener('touchmove', onMove, {passive:false})
+    window.addEventListener('touchend', onUp)
+    return ()=>{ window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); window.removeEventListener('touchmove', onMove); window.removeEventListener('touchend', onUp) }
+  },[pos])
+
   const onDown = (e)=>{
     dragging.current = true
     moved.current = false
     const clientX = e.touches ? e.touches[0].clientX : e.clientX
     const clientY = e.touches ? e.touches[0].clientY : e.clientY
     offset.current = { x: clientX - pos.x, y: clientY - pos.y }
-  }
-  const onMove = (e)=>{
-    if(!dragging.current) return
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY
-    const nx = clientX - offset.current.x
-    const ny = clientY - offset.current.y
-    if(Math.abs(nx - pos.x) > 5 || Math.abs(ny - pos.y) > 5) moved.current = true
-    setPos({ x: nx, y: ny })
-  }
-  const onUp = ()=>{ 
-    dragging.current = false
-    // allow click after 100ms so drag doesn't trigger modal
-    setTimeout(()=>{ moved.current = false }, 100)
   }
 
   const handleClick = ()=>{
@@ -57,24 +64,30 @@ export default function GiftWidget({ userId: propUserId }){
   }
 
   const checkCode = async (val)=>{
-    setCode(val)
-    if(val.length < 2){ setPreview(null); return }
-    const res = await fetch("/api/user/gift/claim", {
-      method:"POST",
-      body: JSON.stringify({ code: val, userId, preview: true }),
-      headers: {"Content-Type":"application/json"}
-    })
-    const data = await res.json()
-    if(data.valid) setPreview(data.amount)
-    else setPreview("Invalid")
+    const CODE = val.toUpperCase()
+    setCode(CODE)
+    if(CODE.length < 2){ setPreview(null); return }
+    // FIX: don't call preview if no userId yet
+    if(!userId) return
+    try{
+      const res = await fetch("/api/user/gift/claim", {
+        method:"POST",
+        body: JSON.stringify({ code: CODE, userId, preview: true }),
+        headers: {"Content-Type":"application/json"}
+      })
+      const data = await res.json()
+      if(data.valid) setPreview(data.amount)
+      else setPreview("Invalid")
+    }catch{ setPreview("Invalid") }
   }
 
   const claim = async ()=>{
     if(!userId) return alert("Login again - user not found")
+    if(!code) return alert("Enter code")
     setLoading(true)
     const res = await fetch("/api/user/gift/claim", {
       method:"POST",
-      body: JSON.stringify({ code, userId }),
+      body: JSON.stringify({ code: code.toUpperCase(), userId }),
       headers: {"Content-Type":"application/json"}
     })
     const data = await res.json()
@@ -91,8 +104,8 @@ export default function GiftWidget({ userId: propUserId }){
   return (
     <>
       <div 
-        onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp}
-        onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp}
+        onMouseDown={onDown}
+        onTouchStart={onDown}
         onClick={handleClick}
         style={{ transform: `translate(${pos.x}px, ${pos.y}px)` }}
         className="fixed bottom-24 right-4 z-50 w-14 h-14 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full flex items-center justify-center shadow-xl cursor-grab active:cursor-grabbing touch-none select-none animate-bounce"
@@ -111,10 +124,10 @@ export default function GiftWidget({ userId: propUserId }){
                 value={code}
                 onChange={(e)=>checkCode(e.target.value)}
                 placeholder="Enter code e.g. WIN38K"
-                className="flex-1 border rounded-xl px-3 py-3 text-sm text-black"
+                className="flex-1 border rounded-xl px-3 py-3 text-sm text-black uppercase"
               />
               <div className="w-[95px] h-[46px] border rounded-xl bg-yellow-50 flex items-center justify-center text-[11px] font-bold text-orange-600 text-center px-1">
-                {preview ? (typeof preview === 'number' ? `${preview} UGX` : 'Invalid') : '--'}
+                {preview ? (typeof preview === 'number' ? `${preview.toLocaleString()} UGX` : 'Invalid') : '--'}
               </div>
             </div>
 

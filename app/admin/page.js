@@ -29,6 +29,8 @@ export default function Admin(){
   const [depositHistory,setDepositHistory]=useState([])
   const [withdrawHistory,setWithdrawHistory]=useState([])
   const [historyLoading,setHistoryLoading]=useState(false)
+  const [giftCode,setGiftCode]=useState('')
+  const [giftAmount,setGiftAmount]=useState('')
 
   const ADMIN_PHONES=['0753520252','+256753520252','256753520252']
   const normalize=(p='')=>{let s=String(p).replace(/\s/g,''); if(s.startsWith('+256')) s='0'+s.slice(4); if(s.startsWith('256')) s='0'+s.slice(3); return s}
@@ -118,6 +120,16 @@ export default function Admin(){
     else showToast(data.error||'Failed')
   }
 
+  const handleCreateGift=async()=>{
+    if(!giftCode.trim()) return showToast('Enter gift code')
+    const amt=Number(String(giftAmount).replace(/,/g,''))
+    if(!amt || amt<=0) return showToast('Enter gift amount')
+    const res=await fetch('/api/admin/gift/create',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ code: giftCode.trim(), amount: amt }) })
+    const data=await res.json()
+    if(data.success){ showToast(`Gift ${data.code} created ✅`); setGiftCode(''); setGiftAmount('') }
+    else showToast(data.error||'Failed to create gift')
+  }
+
   if(!user) return <div className="min-h-screen bg-white p-6 text-black font-black">Loading admin...</div>
 
   const depositPending = pending.filter(tx=>!String(tx.type).toLowerCase().includes('withdraw'))
@@ -202,6 +214,15 @@ export default function Admin(){
           </div>
         )}
       </div>
+
+      {/* GIFT CODE CREATION CENTER - ADDED AT BOTTOM */}
+      <div className="mt-8 p-4 border-2 border-[#FF1493] rounded-[16px] bg-white">
+        <h2 className="text-[14px] font-black mb-3 uppercase text-[#FF1493]">GIFT CODE CREATION CENTER</h2>
+        <input value={giftCode} onChange={e=>setGiftCode(e.target.value.toUpperCase())} placeholder="Type Gift Code e.g. WIN38K" className="w-full border-2 border-[#FF1493] rounded-[12px] px-3 py-3 text-sm font-bold outline-none mb-3 uppercase" />
+        <input value={giftAmount} onChange={e=>setGiftAmount(e.target.value.replace(/\D/g,''))} placeholder="Amount e.g. 38000" className="w-full border-2 border-[#FF1493] rounded-[12px] px-3 py-3 text-sm font-bold outline-none mb-3" />
+        <button onClick={handleCreateGift} className="w-full py-3 bg-[#FF1493] text-white rounded-[12px] font-black text-sm">CONFIRM CODE</button>
+      </div>
+
     </div>
   )
 }
