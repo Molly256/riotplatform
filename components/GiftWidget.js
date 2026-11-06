@@ -6,7 +6,6 @@ export default function GiftWidget({ userId: propUserId }){
   const [successOpen, setSuccessOpen] = useState(false)
   const [wonAmount, setWonAmount] = useState(0)
   const [code, setCode] = useState("")
-  const [preview, setPreview] = useState(null)
   const [loading, setLoading] = useState(false)
   const [pos, setPos] = useState({ x: 0, y: 0 })
   const [userId, setUserId] = useState(propUserId || null)
@@ -58,23 +57,6 @@ export default function GiftWidget({ userId: propUserId }){
   }
   const handleClick = ()=>{ if(moved.current) return; setOpen(true) }
 
-  const checkCode = async (val)=>{
-    const CODE = val.toUpperCase()
-    setCode(CODE)
-    if(CODE.length < 2){ setPreview(null); return }
-    if(!userId) return
-    try{
-      const res = await fetch("/api/user/gift/claim", {
-        method:"POST",
-        body: JSON.stringify({ code: CODE, userId, preview: true }),
-        headers: {"Content-Type":"application/json"}
-      })
-      const data = await res.json()
-      if(data.valid) setPreview(data.amount)
-      else setPreview("Invalid")
-    }catch{ setPreview("Invalid") }
-  }
-
   const claim = async ()=>{
     if(!userId) return
     if(!code) return
@@ -91,7 +73,7 @@ export default function GiftWidget({ userId: propUserId }){
       setOpen(false)
       setSuccessOpen(true)
       try{
-        for(const k of ['riot_user','user']){
+        for(const k of ['riot_user','user','currentUser','riotUser','authUser']){
           const raw = localStorage.getItem(k)
           if(raw){
             const lu = JSON.parse(raw)
@@ -102,7 +84,7 @@ export default function GiftWidget({ userId: propUserId }){
           }
         }
       }catch{}
-    }else{ setPreview("Invalid") }
+    }else{ alert(data.message || "Invalid code") }
   }
 
   return (
@@ -124,13 +106,8 @@ export default function GiftWidget({ userId: propUserId }){
           <div className="bg-white rounded-2xl w-full max-w-sm p-5">
             <h2 className="text-center font-bold text-lg text-black">🎁 Gift Giveaway</h2>
             <p className="text-center text-xs text-gray-500 mb-4">First come, first serve</p>
-            <div className="flex gap-2 items-center">
-              <input value={code} onChange={(e)=>checkCode(e.target.value)} placeholder="Enter code e.g. WIN38K" className="flex-1 border rounded-xl px-3 py-3 text-sm text-black uppercase" />
-              <div className="w-[95px] h-[46px] border rounded-xl bg-yellow-50 flex items-center justify-center text-[11px] font-bold text-orange-600 text-center px-1">
-                {preview ? (typeof preview === 'number' ? `${preview.toLocaleString()} UGX` : 'Invalid') : '--'}
-              </div>
-            </div>
-            <button onClick={claim} disabled={typeof preview !== 'number' || loading} className="w-full mt-4 bg-black text-white rounded-xl py-3 text-sm font-bold disabled:opacity-30">
+            <input value={code} onChange={(e)=>setCode(e.target.value.toUpperCase())} placeholder="Enter code e.g. MKTH" className="w-full border rounded-xl px-3 py-3.5 text-sm text-black uppercase tracking-widest text-center font-bold" />
+            <button onClick={claim} disabled={!code.trim() || loading} className="w-full mt-4 bg-black text-white rounded-xl py-3 text-sm font-bold disabled:opacity-30">
               {loading ? '...' : 'Confirm Gift'}
             </button>
             <button onClick={()=>setOpen(false)} className="w-full mt-2 text-xs text-gray-400 py-2">Close</button>
