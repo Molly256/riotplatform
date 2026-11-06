@@ -2,12 +2,27 @@
 import { useState, useEffect } from "react";
 import BottomNav from "@/components/BottomNav";
 import SupportWidget from "@/components/SupportWidget";
+import GiftWidget from "@/components/GiftWidget";
 
 const SLIDES = ["/1.jpg","/2.jpg","/3.jpg","/4.jpg","/5.jpg","/6.jpg","/7.jpg","/8.jpg","/9.jpg"];
 
 export default function DashboardPage() {
   const [active, setActive] = useState("home");
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [userId, setUserId] = useState(null);
+
+  // Get userId for gift widget
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("user") || localStorage.getItem("riotUser") || localStorage.getItem("riot_user");
+      if (saved) {
+        const u = JSON.parse(saved);
+        setUserId(u.userId || u.id || u._id);
+      }
+      // fallback: if you store id directly
+      if (!saved && localStorage.getItem("userId")) setUserId(localStorage.getItem("userId"));
+    } catch {}
+  }, []);
 
   useEffect(() => {
     SLIDES.forEach((src) => {
@@ -73,6 +88,8 @@ export default function DashboardPage() {
       </div>
 
       <SupportWidget />
+      {/* FLOATING DRAGGABLE GIFT WIDGET */}
+      <GiftWidget userId={userId} />
       <BottomNav active={active} setActive={setActive} />
     </div>
   );
