@@ -10,6 +10,10 @@ export default function GiftWidget({ userId: propUserId }){
   const [pos, setPos] = useState({ x: 0, y: 0 })
   const [userId, setUserId] = useState(propUserId || null)
   const [isDragging, setIsDragging] = useState(false)
+  // NEW: Orange gold error popup - replaces alert()
+  const [errorOpen, setErrorOpen] = useState(false)
+  const [errorMessage, setErrorMessage] = useState("")
+  const [errorTitle, setErrorTitle] = useState("Oops!")
 
   const dragging = useRef(false)
   const moved = useRef(false)
@@ -84,7 +88,23 @@ export default function GiftWidget({ userId: propUserId }){
           }
         }
       }catch{}
-    }else{ alert(data.message || "Invalid code") }
+    }else{
+      // FIXED: No more alert() - orange gold popup
+      setOpen(false)
+      const msg = data.message || "Invalid code"
+      // If backend says already claimed, show exact text you wanted
+      if(data.type === "already_claimed" || msg.toLowerCase().includes("already claimed")){
+        setErrorTitle("Oops!")
+        setErrorMessage("Oops you already claimed the gift")
+      } else if(data.type === "grabbed" || msg.toLowerCase().includes("already grabbed")){
+        setErrorTitle("Gift Giveaway")
+        setErrorMessage(msg)
+      } else {
+        setErrorTitle("Oops!")
+        setErrorMessage(msg)
+      }
+      setErrorOpen(true)
+    }
   }
 
   return (
@@ -115,7 +135,7 @@ export default function GiftWidget({ userId: propUserId }){
         </div>
       )}
 
-      {/* ORANGE GOLD POPUP */}
+      {/* ORANGE GOLD POPUP - SUCCESS */}
       {successOpen && (
         <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4">
           <div className="bg-gradient-to-br from-[#FFD700] via-[#FFA500] to-[#FF6A00] rounded-[24px] w-full max-w-[320px] p-6 text-center shadow-2xl border-2 border-yellow-200">
@@ -126,6 +146,19 @@ export default function GiftWidget({ userId: propUserId }){
             <p className="text-[12px] font-bold text-white/90 mt-2">Added to your Total Balance</p>
             <button onClick={()=>{ setSuccessOpen(false); window.location.href='/mine' }} className="w-full mt-5 py-3.5 bg-white text-[#FF8C00] rounded-full font-black text-[14px] shadow-lg">Go to Mine Page</button>
             <button onClick={()=>{ setSuccessOpen(false); window.location.reload() }} className="w-full mt-2 text-[12px] text-white/80 font-bold py-2">Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* ORANGE GOLD POPUP - OOPS / ALREADY CLAIMED - REPLACES alert() */}
+      {errorOpen && (
+        <div className="fixed inset-0 z-[200] bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-gradient-to-br from-[#FFD700] via-[#FFA500] to-[#FF6A00] rounded-[24px] w-full max-w-[320px] p-6 text-center shadow-2xl border-2 border-yellow-200">
+            <div className="text-[52px] mb-2 drop-shadow">😅</div>
+            <h2 className="font-black text-[22px] text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.3)]">{errorTitle}</h2>
+            <p className="text-[15px] font-bold text-white mt-3 leading-6">{errorMessage}</p>
+            <button onClick={()=>{ setErrorOpen(false); setCode("") }} className="w-full mt-5 py-3.5 bg-white text-[#FF8C00] rounded-full font-black text-[14px] shadow-lg">OK</button>
+            <button onClick={()=>{ setErrorOpen(false); setCode("") }} className="w-full mt-2 text-[12px] text-white/80 font-bold py-2">Close</button>
           </div>
         </div>
       )}
