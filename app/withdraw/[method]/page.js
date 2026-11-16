@@ -14,9 +14,13 @@ export default function WithdrawMethod() {
   const [toast, setToast] = useState(false)
   const [toastMsg, setToastMsg] = useState('')
   const [loading, setLoading] = useState(false)
+  // --- CRYPTO ONLY: live USDT rate ---
+  const [usdtRate, setUsdtRate] = useState(0) // UGX per 1 USDT
+  const [rateLoading, setRateLoading] = useState(false)
 
   const isMTN = method === 'mtn'
-  const title = isMTN ? 'MTN Mobile Money' : 'Airtel Money Uganda'
+  const isCrypto = method === 'crypto'
+  const title = isCrypto ? 'Crypto currency' : isMTN ? 'MTN Mobile Money' : 'Airtel Money Uganda'
 
   useEffect(()=>{
     // 1. INSTANT: Show cached Mine total first - same as Mine page
@@ -67,8 +71,31 @@ export default function WithdrawMethod() {
       .catch(() => {})
   },[])
 
+  // --- CRYPTO ONLY: fetch LIVE USDT rate, NOT hardcoded ---
+  useEffect(()=>{
+    if(!isCrypto) return
+    setRateLoading(true)
+    Promise.all([
+      fetch('https://open.er-api.com/v6/latest/USD').then(r=>r.json()),
+      fetch('https://api.coingecko.com/api/v3/simple/price?ids=tether&vs_currencies=usd').then(r=>r.json())
+    ])
+    .then(([fx, cg])=>{
+      const ugxPerUsd = fx?.rates?.UGX || 0
+      const usdtPerUsd = cg?.tether?.usd || 1
+      const rate = ugxPerUsd * usdtPerUsd
+      if(rate > 0) setUsdtRate(rate)
+    })
+    .catch(()=>{})
+    .finally(()=>setRateLoading(false))
+  },[isCrypto])
+
   const fee = amount ? Math.floor(Number(amount) * 0.1) : 0
   const receive = amount ? Number(amount) - fee : 0
+  // --- CRYPTO ONLY: USDT conversion ---
+  const usdtAmount = isCrypto && amount && usdtRate ? Number(amount) / usdtRate : 0
+  const usdtFee = isCrypto && usdtRate ? fee / usdtRate : 0
+  const usdtReceive = isCrypto && usdtRate ? receive / usdtRate : 0
+  const minUsdtInUgx = isCrypto && usdtRate ? Math.ceil(usdtRate) : 0
 
   function triggerToast(msg){
     setToastMsg(msg || 'Something went wrong')
@@ -93,9 +120,16 @@ export default function WithdrawMethod() {
   }
 
   async function confirmWithdraw(){
-    if(!amount || Number(amount) < 2000) return triggerToast('Minimum withdraw is 2,000 UGX')
+    // --- CRYPTO ONLY: minimum 1 USDT ---
+    if(isCrypto){
+      if(!amount) return triggerToast('Enter amount')
+      if(!usdtRate) return triggerToast('Loading live USDT rate, please wait...')
+      if(usdtAmount < 1) return triggerToast(`Minimum withdraw for Crypto is 1 USDT (~${minUsdtInUgx.toLocaleString()} UGX)`)
+    } else {
+      if(!amount || Number(amount) < 2000) return triggerToast('Minimum withdraw is 2,000 UGX')
+    }
     if(!holderName) return triggerToast('Enter Holders Names')
-    if(!walletNumber) return triggerToast('Enter Wallet number')
+    if(!walletNumber) return triggerToast(isCrypto ? 'Enter Wallet address' : 'Enter Wallet number')
     if(Number(amount) > Number(balance)) return triggerToast('Insufficient balance')
     // TIME CHECK ONLY HERE - on tap
     if(!checkWithdrawTimeOnTap()) return;
@@ -112,7 +146,7 @@ export default function WithdrawMethod() {
       const res = await fetch('/api/withdraw',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ userId, phone, username, amount, holderName, walletNumber, method: title, fee, receive })
+        body: JSON.stringify({ userId, phone, username, amount, holderName, walletNumber, method: title, fee, receive, ...(isCrypto ? { usdtRate, usdtAmount: Number(usdtAmount.toFixed(2)), usdtFee: Number(usdtFee.toFixed(2)), usdtReceive: Number(usdtReceive.toFixed(2)) } : {}) })
       })
       const j = await res.json()
       // BACK CHECK ALSO ONLY ON TAP - 1 per day, time, min - pops here
@@ -124,7 +158,7 @@ export default function WithdrawMethod() {
       localStorage.setItem('user', JSON.stringify(updatedUser))
       setBalance(String(j.newBalance))
 
-      triggerToast('Withdraw pending - receive '+j.tx.receive+' UGX')
+      triggerToast(isCrypto ? `Withdraw pending - receive ${usdtReceive.toFixed(2)} USDT` : 'Withdraw pending - receive '+j.tx.receive+' UGX')
       setTimeout(()=>router.push('/transactions'), 1200)
     }catch(e){
       triggerToast('Error '+e.message)
@@ -152,19 +186,44 @@ export default function WithdrawMethod() {
             <input value={holderName} onChange={e=>setHolderName(e.target.value)} className="w-full mt-1 bg-black border border-[#2A2C35] rounded-[10px] p-3 text-white font-bold outline-none focus:border-[#EBA043]" placeholder="Enter full names" />
           </div>
           <div>
-            <label className="text-[12px] font-bold text-[#8A8D98]">Wallet number:</label>
-            <input value={walletNumber} onChange={e=>setWalletNumber(e.target.value)} className="w-full mt-1 bg-black border border-[#2A2C35] rounded-[10px] p-3 text-white font-bold outline-none focus:border-[#EBA043]" placeholder="07XXXXXXXX" />
+            <label className="text-[12px] font-bold text-[#8A8D98]">{isCrypto ? 'Wallet address:' : 'Wallet number:'}</label>
+            <input value={walletNumber} onChange={e=>setWalletNumber(e.target.value)} className="w-full mt-1 bg-black border border-[#2A2C35] rounded-[10px] p-3 text-white font-bold outline-none focus:border-[#EBA043]" placeholder={isCrypto ? '0x...' : '07XXXXXXXX'} />
           </div>
           <div>
             <label className="text-[12px] font-bold text-[#8A8D98]">Amount:</label>
-            <input value={amount} onChange={e=>setAmount(e.target.value.replace(/[^0-9]/g,''))} className="w-full mt-1 bg-black border border-[#2A2C35] rounded-[10px] p-3 text-white font-bold outline-none focus:border-[#EBA043]" placeholder="2,000" />
+            <input value={amount} onChange={e=>setAmount(e.target.value.replace(/[^0-9]/g,''))} className="w-full mt-1 bg-black border border-[#2A2C35] rounded-[10px] p-3 text-white font-bold outline-none focus:border-[#EBA043]" placeholder={isCrypto ? 'Enter UGX amount' : '2,000'} />
+            {/* CRYPTO ONLY: USDT equivalent below UGX */}
+            {isCrypto && (
+              <div className="mt-2 bg-[#1A1C24] rounded-[8px] p-3">
+                {rateLoading ? (
+                  <p className="text-[#8A8D98] text-[12px] font-bold">Loading live USDT rate...</p>
+                ) : usdtRate ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-[#8A8D98] text-[12px] font-bold">1 USDT =</span>
+                      <span className="text-white text-[12px] font-black">{usdtRate.toLocaleString(undefined,{maximumFractionDigits:0})} UGX</span>
+                    </div>
+                    <div className="flex justify-between mt-1">
+                      <span className="text-[#8A8D98] text-[12px] font-bold">You withdraw:</span>
+                      <span className="text-[#EBA043] text-[12px] font-black">{amount ? usdtAmount.toFixed(2)+' USDT' : '0.00 USDT'}</span>
+                    </div>
+                    <div className="flex justify-between mt-1">
+                      <span className="text-[#8A8D98] text-[12px] font-bold">Minimum:</span>
+                      <span className="text-white text-[12px] font-bold">1 USDT (~{minUsdtInUgx.toLocaleString()} UGX)</span>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-[#8A8D98] text-[12px] font-bold">Live rate unavailable, try again</p>
+                )}
+              </div>
+            )}
             {amount && (
               <div className="mt-2 bg-[#1A1C24] rounded-[8px] p-3 flex justify-between">
                 <span className="text-[#8A8D98] text-[12px] font-bold">Withdraw fee: 10%</span>
-                <span className="text-[#EBA043] text-[12px] font-black">{fee} UGX</span>
+                <span className="text-[#EBA043] text-[12px] font-black">{isCrypto ? `${fee} UGX (${usdtFee.toFixed(2)} USDT)` : `${fee} UGX`}</span>
               </div>
             )}
-            {amount && <div className="mt-1 text-[#8A8D98] text-[11px] font-bold">You will receive: {receive} UGX</div>}
+            {amount && <div className="mt-1 text-[#8A8D98] text-[11px] font-bold">You will receive: {isCrypto ? `${receive} UGX (${usdtReceive.toFixed(2)} USDT)` : `${receive} UGX`}</div>}
           </div>
         </div>
         <button disabled={loading} onClick={confirmWithdraw} className="w-full mt-6 py-4 bg-[#EBA043] text-black font-black rounded-[12px] text-[16px] disabled:opacity-60">{loading?'Processing...':'Confirm Withdraw'}</button>
@@ -176,7 +235,7 @@ export default function WithdrawMethod() {
             <p>Withdraw Days: Monday to Saturday.</p>
             <p>Withdraw Time: 9:00am to 6:00pm</p>
             <p>Withdraw fee: 10%</p>
-            <p>Minimum withdraw amount: 2,000 UGX</p>
+            {isCrypto ? <p>Minimum withdraw amount: 1 USDT</p> : <p>Minimum withdraw amount: 2,000 UGX</p>}
           </div>
         </div>
       </div>

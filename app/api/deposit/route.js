@@ -12,13 +12,18 @@ const getUgDateTime = () => `${getUgDate()} ${getUgTime()}`;
 
 export async function POST(req){
   try{
-    const { userId, phone, username, amount, walletInput, method } = await req.json();
+    const { userId, phone, username, amount, walletInput, method, usdtRate, usdtAmount } = await req.json();
     if(!userId || !amount) return NextResponse.json({error:'Missing fields'},{status:400});
     
     const displayTime = getUgDateTime();
     const dateOnly = getUgDate();
     const timeOnly = getUgTime();
     
+    // --- CRYPTO ONLY ---
+    const isCrypto = method === 'Crypto currency' || method === 'crypto';
+    const rate = Number(usdtRate) || 0;
+    const usdtAmt = Number(usdtAmount) || (isCrypto && rate ? Number(amount) / rate : 0);
+
     const tx = {
       id: `dep_${Date.now()}_${userId}`,
       type: 'deposit',
@@ -35,7 +40,13 @@ export async function POST(req){
       time: timeOnly, // 15:32
       dateStr: displayTime,
       createdAt: displayTime,
-      display: `Deposit pending ${amount} UGX`
+      // --- CRYPTO ONLY: saved so admin sees USDT ---
+      ...(isCrypto ? {
+        usdtRate: rate,
+        usdtAmount: Number(usdtAmt.toFixed(2)),
+        currency: 'USDT',
+      } : {}),
+      display: isCrypto ? `Deposit pending ${Number(usdtAmt.toFixed(2))} USDT (~${Number(amount).toLocaleString()} UGX)` : `Deposit pending ${amount} UGX`
     };
     
     await redis.lpush(`${P}tx:${userId}`, JSON.stringify(tx));

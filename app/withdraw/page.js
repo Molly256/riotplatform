@@ -68,6 +68,14 @@ export default function Withdraw() {
             </div>
             {selected==='airtel' && <div className="w-7 h-7 bg-[#EBA043] rounded-full flex items-center justify-center text-black font-black">✓</div>}
           </div>
+
+          <div onClick={()=>setSelected('crypto')} className={`bg-[#12131A] rounded-[14px] p-4 flex items-center justify-between border cursor-pointer ${selected==='crypto'?'border-[#EBA043]':'border-[#2A2C35]'}`}>
+            <div className="flex items-center gap-3">
+              <img src="/crypto.png" className="w-[56px] h-[56px] rounded-[12px] bg-white object-cover" />
+              <div><p className="font-black">Crypto currency</p><p className="text-[#9A8B7A] text-[12px] font-bold">Crypto • USDT 💰</p></div>
+            </div>
+            {selected==='crypto' && <div className="w-7 h-7 bg-[#EBA043] rounded-full flex items-center justify-center text-black font-black">✓</div>}
+          </div>
         </div>
 
         <button onClick={()=>router.push(`/withdraw/${selected}`)} className="w-full mt-8 py-4 bg-[#EBA043] text-black font-black rounded-[12px]">Continue</button>

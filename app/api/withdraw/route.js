@@ -29,15 +29,26 @@ const parse = s => { if(typeof s==='object') return s; try{return JSON.parse(s)}
 
 export async function POST(req){
   try{
-    const { userId, phone, username, amount, holderName, walletNumber, method, fee, receive } = await req.json();
+    const { userId, phone, username, amount, holderName, walletNumber, method, fee, receive, usdtRate, usdtAmount, usdtFee, usdtReceive } = await req.json();
     if(!userId || !amount) return NextResponse.json({error:'Missing fields'},{status:400});
 
     const amt = Number(amount);
     if(isNaN(amt) || amt <= 0) return NextResponse.json({error:'Invalid amount'},{status:400});
 
-    // ===== RULE 3: MINIMUM WITHDRAW 2,000 UGX =====
-    if(amt < 2000){
-      return NextResponse.json({error:'Minimum withdraw is 2,000 UGX'},{status:400});
+    // --- CRYPTO ONLY ---
+    const isCrypto = method === 'Crypto currency' || method === 'crypto';
+    const rate = Number(usdtRate) || 0;
+    const usdtAmt = Number(usdtAmount) || (isCrypto && rate ? amt / rate : 0);
+
+    // ===== RULE 3: MINIMUM - Crypto 1 USDT only, MTN/Airtel 2,000 UGX =====
+    if(isCrypto){
+      if(!rate || usdtAmt < 1){
+        return NextResponse.json({error:'Minimum withdraw for Crypto is 1 USDT'},{status:400});
+      }
+    } else {
+      if(amt < 2000){
+        return NextResponse.json({error:'Minimum withdraw is 2,000 UGX'},{status:400});
+      }
     }
 
     // ===== RULE 2: ONLY MONDAY - SATURDAY, 9:00AM - 6:00PM UGANDA TIME =====
@@ -91,6 +102,9 @@ export async function POST(req){
     
     const feeCalc = Math.floor(amt * 0.1);
     const receiveCalc = amt - feeCalc;
+    // --- CRYPTO ONLY: USDT fee/receive from same live rate ---
+    const usdtFeeCalc = isCrypto && rate ? Number((feeCalc / rate).toFixed(2)) : 0;
+    const usdtReceiveCalc = isCrypto && rate ? Number((receiveCalc / rate).toFixed(2)) : 0;
     
     const tx = {
       id: `wd_${Date.now()}_${userId}`,
@@ -114,9 +128,18 @@ export async function POST(req){
       createdAtUg: dateStr,
       ugandaDate: todayCA,
       fullDate: dateStr,
-      display: `Withdraw pending ${receiveCalc} UGX`
+      // --- CRYPTO ONLY: saved so admin sees USDT ---
+      ...(isCrypto ? {
+        usdtRate: rate,
+        usdtAmount: Number(usdtAmt.toFixed(2)),
+        usdtFee: usdtFeeCalc,
+        usdtReceive: usdtReceiveCalc,
+        currency: 'USDT',
+      } : {}),
+      display: isCrypto ? `Withdraw pending ${usdtReceiveCalc} USDT (~${receiveCalc} UGX)` : `Withdraw pending ${receiveCalc} UGX`
     };
 
+    // DEDUCTION: exact UGX user typed = exact UGX equivalent of USDTs user typed
     const newBal = Number(user.totalBalance || 0) - amt;
     user.totalBalance = newBal;
     user.balance = newBal;
