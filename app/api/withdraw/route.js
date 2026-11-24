@@ -27,6 +27,9 @@ const toISODate = (val) => {
 
 const parse = s => { if(typeof s==='object') return s; try{return JSON.parse(s)}catch{return null} }
 
+// --- ADDED ONLY: allowed withdraw amounts - MIN stays 2000 ---
+const ALLOWED_AMOUNTS = [2000, 10000, 36000, 50000, 85000, 100000, 150000, 200000, 300000, 530000, 750000, 1000000];
+
 export async function POST(req){
   try{
     const { userId, phone, username, amount, holderName, walletNumber, method, fee, receive, usdtRate, usdtAmount, usdtFee, usdtReceive } = await req.json();
@@ -51,17 +54,19 @@ export async function POST(req){
       }
     }
 
+    // --- ADDED ONLY: allowed amounts ---
+    if(!ALLOWED_AMOUNTS.includes(amt)){
+      return NextResponse.json({error:'Withdraw amount must be one of: 2,000, 10,000, 36,000, 50,000, 85,000, 100,000, 150,000, 200,000, 300,000, 530,000, 750,000, 1,000,000 UGX'},{status:400});
+    }
+
     // ===== RULE 2: ONLY MONDAY - SATURDAY, 9:00AM - 6:00PM UGANDA TIME =====
-    // Get Kampala day + hour correctly
     const nowUg = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Kampala' }));
     const day = nowUg.getDay(); // 0=Sunday, 1=Monday ... 6=Saturday
     const hour = nowUg.getHours();
-    const minute = nowUg.getMinutes();
 
     if(day === 0){
       return NextResponse.json({error:'Withdrawals are closed on Sunday. Available Monday to Saturday.'},{status:400});
     }
-    // 9:00 to 18:00 - allow 09:00:00 to 17:59:59, block 18:00 and after, block before 09:00
     if(hour < 9 || hour >= 18){
       return NextResponse.json({error:'Withdrawals are only available Monday to Saturday from 9:00AM to 6:00PM Uganda time.'},{status:400});
     }
@@ -69,12 +74,23 @@ export async function POST(req){
     const userRaw = await redis.get(`${P}user:${userId}`);
     const user = parse(userRaw);
     if(!user) return NextResponse.json({error:'User not found'},{status:404});
+
+    // --- ADDED ONLY: must have staked - REAL KEYS from Stake API ---
+    const uid = user.userId || userId;
+    const [stakesRaw, firstStake] = await Promise.all([
+      redis.lrange(`${P}stakes:${uid}`, 0, -1),
+      redis.get(`${P}stake:first:${uid}`)
+    ]);
+    const hasStaked = (stakesRaw && stakesRaw.length > 0) || !!firstStake;
+    if(!hasStaked){
+      return NextResponse.json({error:'first stake to withdraw'},{status:400});
+    }
+
     if(Number(user.totalBalance || user.balance || 0) < amt){
       return NextResponse.json({error:'Insufficient balance'},{status:400});
     }
 
     // ===== RULE 1: ONLY 1 WITHDRAW PER DAY IF ALREADY SUCCESS =====
-    // Check all tx lists for a withdraw today with status success (or pending - to stop spam)
     const todayCA = getUgDateCA();
     const [txRaw, txRaw2] = await Promise.all([
       redis.lrange(`${P}tx:${userId}`, 0, 500),
@@ -86,9 +102,7 @@ export async function POST(req){
       const t = String(tx.type || tx.label || '').toLowerCase();
       if(!t.includes('withdraw')) return false;
       const st = String(tx.status || '').toLowerCase();
-      // Block if success OR pending today - pending means they already have one waiting
       if(st !== 'success' && st !== 'pending' && st !== 'approved') return false;
-      // Check date via any field
       const candidates = [tx.ugandaDate, tx.date, tx.dateStr, tx.createdAt, tx.displayTime, tx.timestamp ? new Date(Number(tx.timestamp)).toISOString() : ''];
       return candidates.some(c => toISODate(c) === todayCA);
     });
@@ -102,7 +116,6 @@ export async function POST(req){
     
     const feeCalc = Math.floor(amt * 0.1);
     const receiveCalc = amt - feeCalc;
-    // --- CRYPTO ONLY: USDT fee/receive from same live rate ---
     const usdtFeeCalc = isCrypto && rate ? Number((feeCalc / rate).toFixed(2)) : 0;
     const usdtReceiveCalc = isCrypto && rate ? Number((receiveCalc / rate).toFixed(2)) : 0;
     
@@ -128,7 +141,6 @@ export async function POST(req){
       createdAtUg: dateStr,
       ugandaDate: todayCA,
       fullDate: dateStr,
-      // --- CRYPTO ONLY: saved so admin sees USDT ---
       ...(isCrypto ? {
         usdtRate: rate,
         usdtAmount: Number(usdtAmt.toFixed(2)),
@@ -139,7 +151,6 @@ export async function POST(req){
       display: isCrypto ? `Withdraw pending ${usdtReceiveCalc} USDT (~${receiveCalc} UGX)` : `Withdraw pending ${receiveCalc} UGX`
     };
 
-    // DEDUCTION: exact UGX user typed = exact UGX equivalent of USDTs user typed
     const newBal = Number(user.totalBalance || 0) - amt;
     user.totalBalance = newBal;
     user.balance = newBal;

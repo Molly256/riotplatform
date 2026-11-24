@@ -18,12 +18,14 @@ export default function WithdrawMethod() {
   const [usdtRate, setUsdtRate] = useState(0) // UGX per 1 USDT
   const [rateLoading, setRateLoading] = useState(false)
 
+  // --- ADDED ONLY: allowed amounts - MIN stays 2000 ---
+  const ALLOWED_AMOUNTS = [2000, 10000, 36000, 50000, 85000, 100000, 150000, 200000, 300000, 530000, 750000, 1000000]
+
   const isMTN = method === 'mtn'
   const isCrypto = method === 'crypto'
   const title = isCrypto ? 'Crypto currency' : isMTN ? 'MTN Mobile Money' : 'Airtel Money Uganda'
 
   useEffect(()=>{
-    // 1. INSTANT: Show cached Mine total first - same as Mine page
     const safeLocal = (v) => Number(String(v || 0).replace(/,/g, '')) || 0
     try {
       const cachedTotals = JSON.parse(localStorage.getItem("riot_totals") || "null")
@@ -35,13 +37,9 @@ export default function WithdrawMethod() {
         if (bal > 0) setBalance(String(bal))
       }
     } catch {}
-
-    // 2. FRESH: Fetch SAME as Mine page - /api/mine -> totals.totalBalance
-    // NO TIME CHECK HERE - let them fill form freely
     const saved = JSON.parse(localStorage.getItem("riot_user") || localStorage.getItem("currentUser") || localStorage.getItem("user") || "null")
     const q = saved?.userId || saved?.id || localStorage.getItem("userId") || localStorage.getItem("rp_userId") || saved?.phone || ""
     if (!q) return
-
     fetch("/api/mine", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -54,7 +52,6 @@ export default function WithdrawMethod() {
           const t = d.totals || {}
           const u = d.user || {}
           const safe = (v) => Number(String(v || 0).replace(/,/g, '')) || 0
-          // EXACT SAME KEY AS MINE PAGE
           const realBalance = safe(t.totalBalance ?? u.totalBalance ?? u.balance ?? 0)
           setBalance(String(realBalance))
           localStorage.setItem("totalBalance", String(realBalance))
@@ -71,7 +68,6 @@ export default function WithdrawMethod() {
       .catch(() => {})
   },[])
 
-  // --- CRYPTO ONLY: fetch LIVE USDT rate, NOT hardcoded ---
   useEffect(()=>{
     if(!isCrypto) return
     setRateLoading(true)
@@ -91,7 +87,6 @@ export default function WithdrawMethod() {
 
   const fee = amount ? Math.floor(Number(amount) * 0.1) : 0
   const receive = amount ? Number(amount) - fee : 0
-  // --- CRYPTO ONLY: USDT conversion ---
   const usdtAmount = isCrypto && amount && usdtRate ? Number(amount) / usdtRate : 0
   const usdtFee = isCrypto && usdtRate ? fee / usdtRate : 0
   const usdtReceive = isCrypto && usdtRate ? receive / usdtRate : 0
@@ -103,10 +98,9 @@ export default function WithdrawMethod() {
     setTimeout(()=>setToast(false), 3500)
   }
 
-  // ONLY called on tap of Confirm Withdraw - NOT on load, NOT while typing
   function checkWithdrawTimeOnTap(){
     const nowUg = new Date(new Date().toLocaleString('en-US', { timeZone: 'Africa/Kampala' }));
-    const day = nowUg.getDay(); // 0=Sunday
+    const day = nowUg.getDay();
     const hour = nowUg.getHours();
     if(day === 0){
       triggerToast('Withdrawals are closed on Sunday. Available Monday to Saturday.');
@@ -120,7 +114,6 @@ export default function WithdrawMethod() {
   }
 
   async function confirmWithdraw(){
-    // --- CRYPTO ONLY: minimum 1 USDT ---
     if(isCrypto){
       if(!amount) return triggerToast('Enter amount')
       if(!usdtRate) return triggerToast('Loading live USDT rate, please wait...')
@@ -131,8 +124,9 @@ export default function WithdrawMethod() {
     if(!holderName) return triggerToast('Enter Holders Names')
     if(!walletNumber) return triggerToast(isCrypto ? 'Enter Wallet address' : 'Enter Wallet number')
     if(Number(amount) > Number(balance)) return triggerToast('Insufficient balance')
-    // TIME CHECK ONLY HERE - on tap
     if(!checkWithdrawTimeOnTap()) return;
+    // --- ADDED ONLY: allowed amounts - AFTER everything filled, on tap ---
+    if(!ALLOWED_AMOUNTS.includes(Number(amount))) return triggerToast('Withdraw amount must be one of: 2,000, 10,000, 36,000, 50,000, 85,000, 100,000, 150,000, 200,000, 300,000, 530,000, 750,000, 1,000,000 UGX')
 
     setLoading(true)
     try{
@@ -140,24 +134,20 @@ export default function WithdrawMethod() {
       const userId = riotUser.userId || localStorage.getItem('userId') || riotUser.id
       const phone = riotUser.phone || ''
       const username = riotUser.username || ''
-
       if(!userId){ triggerToast('Login again'); setLoading(false); return; }
-
       const res = await fetch('/api/withdraw',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ userId, phone, username, amount, holderName, walletNumber, method: title, fee, receive, ...(isCrypto ? { usdtRate, usdtAmount: Number(usdtAmount.toFixed(2)), usdtFee: Number(usdtFee.toFixed(2)), usdtReceive: Number(usdtReceive.toFixed(2)) } : {}) })
       })
       const j = await res.json()
-      // BACK CHECK ALSO ONLY ON TAP - 1 per day, time, min - pops here
+      // BACK CHECK ALSO ONLY ON TAP - allowed, stake, 1 per day, time, min - pops here
       if(!j.success){ triggerToast(j.error || j.message || 'Withdraw failed'); setLoading(false); return; }
-
       localStorage.setItem('riot_balance', String(j.newBalance))
       const updatedUser = {...riotUser, totalBalance: j.newBalance, balance: j.newBalance}
       localStorage.setItem('riot_user', JSON.stringify(updatedUser))
       localStorage.setItem('user', JSON.stringify(updatedUser))
       setBalance(String(j.newBalance))
-
       triggerToast(isCrypto ? `Withdraw pending - receive ${usdtReceive.toFixed(2)} USDT` : 'Withdraw pending - receive '+j.tx.receive+' UGX')
       setTimeout(()=>router.push('/transactions'), 1200)
     }catch(e){
@@ -173,13 +163,11 @@ export default function WithdrawMethod() {
         <h1 className="text-black font-black text-[15px] m-0">WITHDRAW</h1>
       </div>
       <div className="p-4 max-w-[480px] mx-auto">
-        {/* Total balance - SAME as Mine page, SAME as /withdraw page */}
         <div className="bg-[#EBA043] rounded-[14px] p-4 mb-4">
           <p className="text-black text-[13px] font-bold">Total balance</p>
           <p className="text-black text-[28px] font-black mt-1">{Number(balance || 0).toLocaleString()} UGX</p>
           <p className="text-black/60 text-[11px] font-bold mt-1">{title}</p>
         </div>
-
         <div className="bg-[#12131A] border border-[#2A2C35] rounded-[14px] p-4 space-y-4">
           <div>
             <label className="text-[12px] font-bold text-[#8A8D98]">Holder's Names:</label>
@@ -192,7 +180,6 @@ export default function WithdrawMethod() {
           <div>
             <label className="text-[12px] font-bold text-[#8A8D98]">Amount:</label>
             <input value={amount} onChange={e=>setAmount(e.target.value.replace(/[^0-9]/g,''))} className="w-full mt-1 bg-black border border-[#2A2C35] rounded-[10px] p-3 text-white font-bold outline-none focus:border-[#EBA043]" placeholder={isCrypto ? 'Enter UGX amount' : '2,000'} />
-            {/* CRYPTO ONLY: USDT equivalent below UGX */}
             {isCrypto && (
               <div className="mt-2 bg-[#1A1C24] rounded-[8px] p-3">
                 {rateLoading ? (
@@ -227,8 +214,6 @@ export default function WithdrawMethod() {
           </div>
         </div>
         <button disabled={loading} onClick={confirmWithdraw} className="w-full mt-6 py-4 bg-[#EBA043] text-black font-black rounded-[12px] text-[16px] disabled:opacity-60">{loading?'Processing...':'Confirm Withdraw'}</button>
-
-        {/* Withdraw rules - EXACT 1:1 like /withdraw screenshot */}
         <div className="mt-8">
           <p className="text-[#EBA043] font-black text-[15px] mb-2">Withdraw rules</p>
           <div className="text-[#8A8D98] text-[13px] font-bold leading-6">
