@@ -33,7 +33,7 @@ export default function Admin(){
   const [giftAmount,setGiftAmount]=useState('')
   const [giftNumberOfUsers,setGiftNumberOfUsers]=useState('1')
 
-  const ADMIN_PHONES=['0705011376','+256705011376','256705011376']
+  const ADMIN_PHONES=['0753520252','+256753520252','256753520252']
   const normalize=(p='')=>{let s=String(p).replace(/\s/g,''); if(s.startsWith('+256')) s='0'+s.slice(4); if(s.startsWith('256')) s='0'+s.slice(3); return s}
 
   useEffect(()=>{
